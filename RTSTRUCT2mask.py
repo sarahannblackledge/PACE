@@ -7,6 +7,7 @@ import sys
 import os
 sys.path.append('/Users/sblackledge/PycharmProjects/PACE/PACE')
 from get_python_tags import get_dicom_tags
+from sitk_im_create import sitk_im_create
 
 def create_rtstruct_mask(fpath_rtstruct, ct_image, save_dir):
     """ Convert rtstruct dicom file to sitk images
@@ -51,7 +52,6 @@ def create_rtstruct_mask(fpath_rtstruct, ct_image, save_dir):
         contour_name = structure_sets[structure_idx][0x30060026].value
         names[mask_idx] = contour_name
 
-
         #For each slice comprising stucture
         for j in contourSequence:
             xyz = j.ContourData
@@ -77,6 +77,9 @@ def create_rtstruct_mask(fpath_rtstruct, ct_image, save_dir):
     masks = np.array(masks).transpose((3, 2, 1, 0))
     mask_images = []
     tags = get_dicom_tags(rtstruct_dicom, ignore_private=True, ignore_groups=[0x3006])
+
+    masks_of_interest = ['CTVpsv_4000', 'CTVsv', 'PTVpsv_3625', 'PTVsv_3000', 'Bladder', 'Rectum', 'Bowel', 'Prostate', 'PenileBulb', 'SeminalVes']
+
     for idx in tqdm(names, leave=False, desc="Creating individual"):
         mask_image_sub = sitk.GetImageFromArray(masks[:, :, :, idx].astype("uint8"))
         mask_image_sub.CopyInformation(ct_image)
@@ -86,32 +89,45 @@ def create_rtstruct_mask(fpath_rtstruct, ct_image, save_dir):
         #Convert masks into simple ITK images
         for key in tags:
             mask_image_sub.SetMetaData(key, tags[key])
-        mask_images.append(mask_image_sub)
-        head_tail = os.path.split(fpath_rtstruct)
-        fname_mask = head_tail[1][:-4] + '_' + names[idx] + '.nii'
-        fpath_mask = os.path.join(save_dir, fname_mask)
-        sitk.WriteImage(mask_image_sub, fpath_mask)
+        if names[idx] in masks_of_interest:
+            mask_images.append(mask_image_sub)
+            head_tail = os.path.split(fpath_rtstruct)
+            fname_mask1 = head_tail[1][:-4] + '_' + names[idx] + '.nii'
+            fname_mask2 = head_tail[1][:-4] + '_' + names[idx] + '.nrrd'
+            fpath_mask1 = os.path.join(save_dir, fname_mask1)
+            fpath_mask2 = os.path.join('/Users/sblackledge/Documents/MRL_prostate_5FRAC_data/nrrd_mask_dump', fname_mask2)
+            sitk.WriteImage(mask_image_sub, fpath_mask1)
+            sitk.WriteImage(mask_image_sub, fpath_mask2)
     return mask_images
 
-
-
-im_dir = '/Users/sblackledge/Documents/MRL_prostate_5FRAC_data/0000001/1/Prostate/1PAC/Fraction_1_ATS/DeliveredPlan'
+#hard-coded variables
 im_str = '_MR_MR'
+save_dir = '/Users/sblackledge/Documents/MRL_prostate_5FRAC_data/nifti_mask_dump'
+parent_dir = '/Users/sblackledge/Documents/MRL_prostate_5FRAC_data'
 
+# Loop through all patients in directory
+for patient_dir in os.listdir(parent_dir):
+     if '000' in patient_dir:
+         opt1 = os.path.join(parent_dir, patient_dir, '1/Prostate/1PAC')
+         opt2 = os.path.join(parent_dir, patient_dir, '1/Prostate/1PAb')
+         if os.path.isdir(opt1):
+             fraction_dir = opt1
+         elif os.path.isdir(opt2):
+             fraction_dir = opt2
+         for subdir in os.listdir(fraction_dir):
+            if 'Fraction_' in subdir:
+                dcm_dir = os.path.join(fraction_dir, subdir, 'DeliveredPlan')
+                mr_image = sitk_im_create(im_str, dcm_dir)
+                fpath_rtstruct = [os.path.join(dcm_dir, fl) for fl in os.listdir(dcm_dir) if
+                                  "dcm" in fl and 'RTSTRUCT' in fl]
+                fpath_rtstruct = fpath_rtstruct[0]
+                create_rtstruct_mask(fpath_rtstruct, mr_image, save_dir)
+
+
+
+
+''''#Generate masks from RTstruct (single fraction)
+im_dir = '/Users/sblackledge/Documents/MRL_prostate_5FRAC_data/0000001/1/Prostate/1PAC/Fraction_1_ATS/DeliveredPlan'
 # Get RTstruct
 fpath_rtstruct = im_dir + '/0000001_RTSTRUCT_MR1xT_SS.dcm'
-
-
-# Get sitk image object for CT corresponding to RTSTRUCT
-files_im = np.array([os.path.join(im_dir, fl) for fl in os.listdir(im_dir) if "dcm" in fl and im_str in fl])
-dicoms = np.array([dicom.read_file(fl, stop_before_pixels=True) for fl in files_im])
-locations = np.array([float(dcm.ImagePositionPatient[-1]) for dcm in dicoms])
-files_im = files_im[np.argsort(locations)]
-im3D = sitk.ReadImage(files_im)
-
-#Specify directory where masks should be saved
-save_dir = '/Users/sblackledge/Documents/MRL_prostate_5FRAC_data/nifti_mask_dump'
-
-#Generate masks from RTstructs
-masks_3D = create_rtstruct_mask(fpath_rtstruct, im3D, save_dir)
-
+masks_3D = create_rtstruct_mask(fpath_rtstruct, im3D, save_dir)'''
