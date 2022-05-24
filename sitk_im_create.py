@@ -3,6 +3,12 @@ import SimpleITK as sitk
 import numpy as np
 import os
 
+#generates sitk image object from dicom files
+#inputs:
+    #1. im_str: string - pattern found in all desired dicoms, e.g. '_MR_MR'.
+#    Used to distinguish between other files in directory, such as RTSTRUCTS, REG, etc.
+
+    #2. dcm_dir: string - full file path of directory where dicom images are stored
 
 def sitk_im_create(im_str, dcm_dir):
 
