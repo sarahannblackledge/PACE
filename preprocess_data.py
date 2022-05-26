@@ -6,12 +6,14 @@ import os
 import matplotlib.pyplot as plt
 sys.path.append('/Users/sblackledge/PycharmProjects/PACE/PACE')
 from metadata_from_dose_dir import metadata_from_dose_dir
+from bbox_calc import bbox_calc
 
 
 #adjust per image-dose pair
 patient = 'NIHR_1'
-ids = [97, 1]
+ids = [97]
 plan = 'PACE'
+desired_organs = ['Bladder', 'Bowel', 'Penile_Bulb', 'Rectum', 'ProstateOnly', 'SVsOnly']
 
 for id in ids:
 
@@ -39,9 +41,11 @@ for id in ids:
     if plan == 'PACE':
         fpath_mha = PACE_dict.get(id_num)
         fraction_num = 5
+        dose_level = 1810
     elif plan == 'PRISM':
         fpath_mha = PRISM_dict.get(id_num)
         fraction_num = 20
+        dose_level = 2440
 
     if fpath_mha is None:
         string_in_string = "No dose corresponding to image {}".format(id_str)
@@ -79,6 +83,42 @@ for id in ids:
     savepath_mri = '/Users/sblackledge/Documents/ProKnow_database/nifti_dump_full/MRI'
     savename_mri = os.path.join(savepath_mri, fname)
     sitk.WriteImage(mri, savename_mri)
+
+    #Load in corresponding masks for each desired organ
+    counter = -1
+    sitk_masks = []
+    dir_masks = '/Users/sblackledge/Documents/ProKnow_database/nifti_dump_full/mask'
+    for organ in desired_organs:
+        counter = counter + 1
+        name_mask = patient + '_' + id_str + '_' + organ + '.nii'
+        fpath_mask = os.path.join(dir_masks, name_mask)
+        sitk_mask = sitk.ReadImage(fpath_mask)
+        sitk_masks.append(sitk_mask)
+
+    #crop at specified dose level
+    rmin, rmax, cmin, cmax, zmin, zmax, dims = bbox_calc(total_dose_resample, dose_level)
+    #rows = sup-inf, cols = left-right, z = ant-post
+    savepath_cropped = '/Users/sblackledge/Documents/ProKnow_database/nifti_dump_cropped_resampled'
+    #dose cube
+    total_dose_resample = total_dose_resample[cmin:cmax, zmin:zmax, rmin:rmax]
+    savename_dose = patient + '_' + id_str + '.nii'
+    fpath_cropped_dose = os.path.join(savepath_cropped, 'dose', savename_dose)
+    sitk.WriteImage(total_dose_resample, fpath_cropped_dose)
+    #MRI
+    mri = mri[cmin:cmax, zmin:zmax, rmin:rmax]
+    fpath_cropped_mri = os.path.join(savepath_cropped, 'MRI', savename_dose)
+    sitk.WriteImage(mri, fpath_cropped_mri)
+    #Masks
+    counter2 = -1
+    for mask in sitk_masks:
+        counter2 = counter2 + 1
+        mask = mask[cmin:cmax, zmin:zmax, rmin:rmax]
+        savename_mask = patient + '_' + id_str + '_' + desired_organs[counter2] + '_cropped.nii'
+        fpath_cropped_mask = os.path.join(savepath_cropped, 'masks_segmentation', savename_mask)
+        sitk.WriteImage(mask, fpath_cropped_mask)
+
+    #Resample everything to 96x96x96 for UNETR
+
 
 
     # Display
