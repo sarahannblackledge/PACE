@@ -26,12 +26,8 @@ def metadata_from_dose_dir(dose_dir):
 
 
         #Populate dictionary: key = image id number, value = fpath of corresponding mha file
-        if 'PACE' in plan:
+        if 'PACE' or 'Pace' in plan:
             PACE_dict[im_id] = [file]
-        elif 'PRISM' in plan:
+        elif 'PRISM' or 'Prism' in plan:
             PRISM_dict[im_id] = [file]
     return PACE_dict, PRISM_dict
-
-PACE_dict, PRISM_dict = metadata_from_dose_dir(dose_dir)
-
-
