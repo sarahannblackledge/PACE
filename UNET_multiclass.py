@@ -1,6 +1,6 @@
-from tensorflow.keras.utils import to_categorical
 import numpy as np
 import os
+from tensorflow.keras.utils import to_categorical
 from sklearn.preprocessing import LabelEncoder
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 import matplotlib.pyplot as plt
