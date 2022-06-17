@@ -1,7 +1,6 @@
 import pydicom as dicom
 import SimpleITK as sitk
 import numpy as np
-from tqdm import tqdm
 from skimage.draw import polygon
 import sys
 import os
@@ -10,7 +9,7 @@ from get_python_tags import get_dicom_tags
 from sitk_im_create import sitk_im_create
 from sitk_im_create_simple import sitk_im_create_simple
 
-def create_rtstruct_mask(fpath_rtstruct, ct_image, save_dir):
+def create_rtstruct_mask_multiclass(fpath_rtstruct, ct_image, save_dir):
     """ Convert rtstruct dicom file to sitk images
 
     Args
@@ -48,7 +47,7 @@ def create_rtstruct_mask(fpath_rtstruct, ct_image, save_dir):
     masks = []
     names = {}
 
-    mask_idx = 1
+    mask_idx = 0
     contour_sequences = rtstruct_dicom.ROIContourSequence
 
     # For each contour itemized in ROIContourSequence tag
@@ -57,10 +56,11 @@ def create_rtstruct_mask(fpath_rtstruct, ct_image, save_dir):
         contourSequence = item.ContourSequence
         structure_idx = item[0x30060084].value
         contour_name = structure_sets[structure_idx][0x30060026].value
-        print(contour_name)
+        #print(contour_name)
 
         if contour_name in masks_of_interest:
             names[mask_idx] = contour_name
+            print(contour_name)
 
             #For each slice comprising stucture
             for j in contourSequence:
@@ -86,21 +86,43 @@ def create_rtstruct_mask(fpath_rtstruct, ct_image, save_dir):
 
     masks = np.array(masks).transpose((3, 2, 1, 0))
 
-    #Convert individual masks into single multiclass mask where each structure is assigned a number from 1 - 6 (background = 0)
-    example_mask = masks[:, :, :, 0]
+    #Convert individual masks into single multiclass mask where each structure is assigned a number from 1 - 5 (background = 0)
+    '''example_mask = masks[:, :, :, 0]
     multiclass_mask = np.zeros(example_mask.shape)
     counter = 0
     for i in range(0, np.shape(masks)[-1]):
         indiv_mask = masks[:, :, :, i]
         counter = counter + 1
         indiv_mask = indiv_mask*counter
-        multiclass_mask = indiv_mask + multiclass_mask
+        multiclass_mask = indiv_mask + multiclass_mask'''
+
+    #Get prostate and SVs and combine into a single structure to account for frequent overlap of contours
+    name_idx_dict = dict((v, k) for k, v in names.items())
+    idx_prostate = name_idx_dict.get('ProstateOnly')
+    idx_SVs = name_idx_dict.get('SVsOnly')
+
+    prostate_mask = masks[:, :, :, idx_prostate]
+    SV_mask = masks[:, :, :, idx_SVs]
+    prostate_U_SVs = prostate_mask + SV_mask
+    prostate_U_SVs[prostate_U_SVs > 0] = 1
+
+    # Convert individual masks into single 4D multiclass mask where each structure is indicated by the index in the fourth dimension
+    idx_bladder = name_idx_dict.get('Bladder')
+    idx_PB = name_idx_dict.get('Penile_Bulb')
+    idx_rectum = name_idx_dict.get('Rectum')
+
+    bladder_mask = masks[:, :, :, idx_bladder]
+    PB_mask = masks[:, :, :, idx_PB]
+    rectum_mask = masks[:, :, :, idx_rectum]
+
+    multiclass_mask = np.concatenate((PB_mask[..., np.newaxis], bladder_mask[..., np.newaxis], rectum_mask[..., np.newaxis], prostate_U_SVs[..., np.newaxis]), axis=3)
+
 
     mask_images = []
     tags = get_dicom_tags(rtstruct_dicom, ignore_private=True, ignore_groups=[0x3006])
 
     #Save as nifti
-    mask_image_sub = sitk.GetImageFromArray(multiclass_mask.astype("uint8"))
+    mask_image_sub = sitk.GetImageFromArray(multiclass_mask.astype("uint8"), isVector=True)
     mask_image_sub.CopyInformation(ct_image)
     mask_image_sub.SetMetaData("ContourName", str(names))
     ref_ct_series_uid = rtstruct_dicom[0x3006, 0x10][0][0x3006, 0x12][0][0x3006, 0x14][0][0x20, 0xe].value
@@ -155,17 +177,17 @@ def create_rtstruct_mask(fpath_rtstruct, ct_image, save_dir):
 
 
 #Generate masks from RTstruct (single fraction)
-dcm_dir = '/Users/sblackledge/Documents/ProKnow_database/NIHR_1/MR37'
+dcm_dir = '/Users/sblackledge/Documents/ProKnow_database/NIHR_4/MR9'
 im_str = 'MR1'
 im3D = sitk_im_create_simple(im_str, dcm_dir)
-save_dir = '/Users/sblackledge/Documents/ProKnow_database/nifti_dump_full/masks_multiclass'
+save_dir = '/Users/sblackledge/Documents/ProKnow_database/nifti_dump_full/masks_multiclass_4D'
 # Get RTstruct
-fpath_rtstruct = dcm_dir + '/RS1.2.752.243.1.1.20210408134521712.7400.20617.dcm'
-mask_image_sub, masks, names = create_rtstruct_mask(fpath_rtstruct, im3D, save_dir)
+fpath_rtstruct = dcm_dir + '/RS1.2.752.243.1.1.20210408142245642.1460.83142.dcm'
+mask_image_sub, masks, names = create_rtstruct_mask_multiclass(fpath_rtstruct, im3D, save_dir)
 
 #Loop through ProKnow database
 '''parent_dir = '/Users/sblackledge/Documents/ProKnow_database'
-save_dir = '/Users/sblackledge/Documents/ProKnow_database/nifti_dump_full/mask'
+save_dir = '/Users/sblackledge/Documents/ProKnow_database/nifti_dump_full/masks_multiclass_4D'
 im_str = 'MR1'
 
 for patient_dir in os.listdir(parent_dir):
@@ -182,7 +204,7 @@ for patient_dir in os.listdir(parent_dir):
                 fpath_rtstruct = fpath_rtstruct[0]
 
                 #Save all desired masks as nifti files in save_dir
-                create_rtstruct_mask(fpath_rtstruct, mr_image, save_dir)'''
+                create_rtstruct_mask_multiclass(fpath_rtstruct, mr_image, save_dir)'''
 
 
 
