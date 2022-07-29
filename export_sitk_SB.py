@@ -99,8 +99,8 @@ for dicom_file in os.listdir(dose_directory):
     except:
         raise
 
-dose_dicoms_temp = dose_dicoms[0:3]
-for dose_dicom in dose_dicoms_temp:
+
+for dose_dicom in dose_dicoms:
 
     try:
 
