@@ -10,8 +10,8 @@ from bbox_calc import bbox_calc
 
 
 #adjust per image-dose pair
-patient = 'NIHR_1'
-ids = [97]
+patient = 'NIHR_14'
+ids = [21, 23, 34, 47, 57, 82, 94, 14]
 plan = 'PACE'
 desired_organs = ['Bladder', 'Bowel', 'Penile_Bulb', 'Rectum', 'ProstateOnly', 'SVsOnly']
 
@@ -50,6 +50,11 @@ for id in ids:
     if fpath_mha is None:
         string_in_string = "No dose corresponding to image {}".format(id_str)
         print(string_in_string)
+        # Convert mri dicoms into nifti and save
+        savepath_mri = '/Users/sblackledge/Documents/ProKnow_database/nifti_dump_full/MRI'
+        fname = patient + '_' + id_str + '.nii'
+        savename_mri = os.path.join(savepath_mri, fname)
+        sitk.WriteImage(mri, savename_mri)
         continue
     fpath_mha = fpath_mha[0]
     print(fpath_mha)
@@ -85,7 +90,7 @@ for id in ids:
     sitk.WriteImage(mri, savename_mri)
 
     #Load in corresponding masks for each desired organ
-    counter = -1
+    '''counter = -1
     sitk_masks = []
     dir_masks = '/Users/sblackledge/Documents/ProKnow_database/nifti_dump_full/mask'
     for organ in desired_organs:
@@ -115,7 +120,7 @@ for id in ids:
         mask = mask[cmin:cmax, zmin:zmax, rmin:rmax]
         savename_mask = patient + '_' + id_str + '_' + desired_organs[counter2] + '_cropped.nii'
         fpath_cropped_mask = os.path.join(savepath_cropped, 'masks_segmentation', savename_mask)
-        sitk.WriteImage(mask, fpath_cropped_mask)
+        sitk.WriteImage(mask, fpath_cropped_mask)'''
 
     #Resample everything to 96x96x96 for UNETR
 

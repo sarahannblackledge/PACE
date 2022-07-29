@@ -36,6 +36,10 @@ def create_rtstruct_mask(fpath_rtstruct, ct_image, save_dir):
     #0x30060026 = ROI Name
     structure_sets = {int(d[0x30060022].value):d for d in rtstruct_dicom[0x30060020]}
 
+    # masks_of_interest = ['CTVpsv_4000', 'CTVsv', 'PTVpsv_3625', 'PTVsv_3000', 'Bladder', 'Rectum', 'Bowel', 'Prostate', 'PenileBulb', 'SeminalVes']
+    # masks_of_interest = ['Rectum', 'Bowel', 'Bladder', 'Penile_Bulb', 'ProstateOnly', 'SVsOnly', 'CTV_Prostate', 'CTV_SVs', 'CTV_Prostate+SVs', 'PTV_4860']
+    masks_of_interest = ['ProstateOnly', 'SVsOnly', 'Rectum', 'Bowel', 'Bladder', 'Penile_Bulb']
+
     orX, orY, orZ = ct_image.GetOrigin()
     szX, szY, szZ = ct_image.GetSize()
     spX, spY, spZ = ct_image.GetSpacing()
@@ -54,36 +58,37 @@ def create_rtstruct_mask(fpath_rtstruct, ct_image, save_dir):
         structure_idx = item[0x30060084].value
         contour_name = structure_sets[structure_idx][0x30060026].value
         print(contour_name)
-        names[mask_idx] = contour_name
 
-        #For each slice comprising stucture
-        for j in contourSequence:
-            xyz = j.ContourData
-            x = xyz[0::3]
-            y = xyz[1::3]
-            z = xyz[2::3]
-            z_diff = np.abs(z_locs - z[0])
-            z_idx = np.where(z_diff == np.min(z_diff))[0][0]
-            x_arr  =np.asarray(x)
-            y_arr = np.asarray(y)
-            x = (x_arr - orX) / spX
-            y = (y_arr - orY) / spY
-            mask = roi_mask[:, :, z_idx]
-            mask_new = np.zeros_like(mask)
-            rr, cc = polygon(x, y, mask.shape)
-            mask_new[rr, cc] = True
-            mask = np.logical_xor(mask, mask_new)
-            roi_mask[:, :, z_idx] = mask
+        if contour_name in masks_of_interest:
+            names[mask_idx] = contour_name
 
-        masks.append(roi_mask)
-        mask_idx += 1
+            #For each slice comprising stucture
+            for j in contourSequence:
+                xyz = j.ContourData
+                x = xyz[0::3]
+                y = xyz[1::3]
+                z = xyz[2::3]
+                z_diff = np.abs(z_locs - z[0])
+                z_idx = np.where(z_diff == np.min(z_diff))[0][0]
+                x_arr  =np.asarray(x)
+                y_arr = np.asarray(y)
+                x = (x_arr - orX) / spX
+                y = (y_arr - orY) / spY
+                mask = roi_mask[:, :, z_idx]
+                mask_new = np.zeros_like(mask)
+                rr, cc = polygon(x, y, mask.shape)
+                mask_new[rr, cc] = True
+                mask = np.logical_xor(mask, mask_new)
+                roi_mask[:, :, z_idx] = mask
+
+            masks.append(roi_mask)
+            mask_idx += 1
 
     masks = np.array(masks).transpose((3, 2, 1, 0))
     mask_images = []
     tags = get_dicom_tags(rtstruct_dicom, ignore_private=True, ignore_groups=[0x3006])
 
-    #masks_of_interest = ['CTVpsv_4000', 'CTVsv', 'PTVpsv_3625', 'PTVsv_3000', 'Bladder', 'Rectum', 'Bowel', 'Prostate', 'PenileBulb', 'SeminalVes']
-    masks_of_interest = ['ProstateOnly', 'Rectum', 'Bowel', 'Bladder', 'Penile_Bulb', 'SVsOnly', 'CTV_Prostate', 'CTV_SVs', 'CTV_Prostate+SVs', 'PTV_4860']
+
 
     for idx in tqdm(names, leave=False, desc="Creating individual"):
         print(idx)
@@ -115,14 +120,14 @@ def create_rtstruct_mask(fpath_rtstruct, ct_image, save_dir):
 
             sitk.WriteImage(mask_image_sub, fpath_mask1)
             #sitk.WriteImage(mask_image_sub, fpath_mask2)
-    return mask_images
+    return mask_images, masks
 
 
 #hard-coded variables
 
 #parent_dir = '/Users/sblackledge/Documents/MRL_prostate_5FRAC_data'
 
-# Loop through all patients in directory
+# Loop through all patients in MRL directory
 '''for patient_dir in os.listdir(parent_dir):
      if '000' in patient_dir:
          opt1 = os.path.join(parent_dir, patient_dir, '1/Prostate/1PAC')
@@ -144,15 +149,16 @@ def create_rtstruct_mask(fpath_rtstruct, ct_image, save_dir):
 
 
 #Generate masks from RTstruct (single fraction)
-'''dcm_dir = '/Users/sblackledge/Documents/ProKnow_database/NIHR_1/MR37'
+dcm_dir = '/Users/sblackledge/Documents/ProKnow_database/NIHR_1/MR37'
 im_str = 'MR1'
 im3D = sitk_im_create_simple(im_str, dcm_dir)
+save_dir = '/Users/sblackledge/Documents/ProKnow_database/nifti_dump_full/masks_multiclass'
 # Get RTstruct
 fpath_rtstruct = dcm_dir + '/RS1.2.752.243.1.1.20210408134521712.7400.20617.dcm'
-masks_3D = create_rtstruct_mask(fpath_rtstruct, im3D, save_dir)'''
+masks_3D, masks = create_rtstruct_mask(fpath_rtstruct, im3D, save_dir)
 
 #Loop through ProKnow database
-parent_dir = '/Users/sblackledge/Documents/ProKnow_database'
+'''parent_dir = '/Users/sblackledge/Documents/ProKnow_database'
 save_dir = '/Users/sblackledge/Documents/ProKnow_database/nifti_dump_full/mask'
 im_str = 'MR1'
 
@@ -170,7 +176,7 @@ for patient_dir in os.listdir(parent_dir):
                 fpath_rtstruct = fpath_rtstruct[0]
 
                 #Save all desired masks as nifti files in save_dir
-                create_rtstruct_mask(fpath_rtstruct, mr_image, save_dir)
+                create_rtstruct_mask(fpath_rtstruct, mr_image, save_dir)'''
 
 
 

@@ -56,7 +56,8 @@ def create_rtstruct_mask_multiclass(fpath_rtstruct, ct_image, save_dir):
         contourSequence = item.ContourSequence
         structure_idx = item[0x30060084].value
         contour_name = structure_sets[structure_idx][0x30060026].value
-        #print(contour_name)
+        print(contour_name)
+
 
         if contour_name in masks_of_interest:
             names[mask_idx] = contour_name
@@ -177,12 +178,12 @@ def create_rtstruct_mask_multiclass(fpath_rtstruct, ct_image, save_dir):
 
 
 #Generate masks from RTstruct (single fraction)
-dcm_dir = '/Users/sblackledge/Documents/ProKnow_database/NIHR_4/MR9'
+dcm_dir = '/Users/sblackledge/Documents/ProKnow_database/NIHR_1/MR11'
 im_str = 'MR1'
 im3D = sitk_im_create_simple(im_str, dcm_dir)
 save_dir = '/Users/sblackledge/Documents/ProKnow_database/nifti_dump_full/masks_multiclass_4D'
 # Get RTstruct
-fpath_rtstruct = dcm_dir + '/RS1.2.752.243.1.1.20210408142245642.1460.83142.dcm'
+fpath_rtstruct = dcm_dir + '/RS1.2.752.243.1.1.20210506114701061.2000.61111.dcm'
 mask_image_sub, masks, names = create_rtstruct_mask_multiclass(fpath_rtstruct, im3D, save_dir)
 
 #Loop through ProKnow database

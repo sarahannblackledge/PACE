@@ -5,7 +5,7 @@ import os
 
 #generates sitk image object from dicom files
 #inputs:
-    #1. im_str: string - pattern found in all desired dicoms, e.g. '_MR_MR'.
+    #1. im_str: string - pattern found in all desired dicoms, e.g. '_MR1'.
 #    Used to distinguish between other files in directory, such as RTSTRUCTS, REG, etc.
 
     #2. dcm_dir: string - full file path of directory where dicom images are stored

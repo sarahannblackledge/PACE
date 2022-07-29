@@ -12,3 +12,7 @@ def sitk_im_create_simple(im_str, dcm_dir):
     sitk_im = sitk.ReadImage(files)
 
     return sitk_im
+
+#im_str = 'MR1'
+#dicom_dir = '/Users/sblackledge/Documents/ProKnow_database/NIHR_2/MR6'
+#ct_image = sitk_im_create_simple(im_str, dicom_dir)

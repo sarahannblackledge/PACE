@@ -1,0 +1,123 @@
+import numpy as np
+
+def key():
+    NIHR_1 = 'NIHR_1'
+    NIHR_2 = 'NIHR_2'
+    NIHR_3 = 'NIHR_3'
+    NIHR_4 = 'NIHR_4'
+    NIHR_5 = 'NIHR_5'
+    NIHR_6 = 'NIHR_6'
+    NIHR_7 = 'NIHR_7'
+    NIHR_8 = 'NIHR_8'
+    NIHR_9 = 'NIHR_9'
+    NIHR_10 = 'NIHR_10'
+    NIHR_11 = 'NIHR_11'
+    NIHR_12 = 'NIHR_12'
+    NIHR_13 = 'NIHR_13'
+    NIHR_14 = 'NIHR_14'
+
+    key_vals = np.array([[NIHR_1,	11],
+    [NIHR_1,	37],
+    [NIHR_1,	46],
+    [NIHR_1,	64],
+    [NIHR_1,	86],
+    [NIHR_1,	89],
+    [NIHR_1,	97],
+    [NIHR_10,	3],
+    [NIHR_10,	4],
+    [NIHR_10,	5],
+    [NIHR_10,	12],
+    [NIHR_10,	20],
+    [NIHR_10,	63],
+    [NIHR_10,	70],
+    [NIHR_11,	1],
+    [NIHR_11,	18],
+    [NIHR_11,	38],
+    [NIHR_11,	48],
+    [NIHR_11,	50],
+    [NIHR_11,	59],
+    [NIHR_11,	87],
+    [NIHR_11,	92],
+    [NIHR_12,	24],
+    [NIHR_12,	31],
+    [NIHR_12,	32],
+    [NIHR_12,	43],
+    [NIHR_12,	44],
+    [NIHR_12,	73],
+    [NIHR_12,	90],
+    [NIHR_13,	8],
+    [NIHR_13,	14],
+    [NIHR_13,	17],
+    [NIHR_13,	33],
+    [NIHR_13,	51],
+    [NIHR_13,	53],
+    [NIHR_13,	77],
+    [NIHR_14,	21],
+    [NIHR_14,	23],
+    [NIHR_14,	34],
+    [NIHR_14,	47],
+    [NIHR_14,	57],
+    [NIHR_14,	82],
+    [NIHR_14,	94],
+    [NIHR_2,	6],
+    [NIHR_2,	16],
+    [NIHR_2,	30],
+    [NIHR_2,	101],
+    [NIHR_2,	41],
+    [NIHR_2,	69],
+    [NIHR_2,	98],
+    [NIHR_3,	15],
+    [NIHR_3,	25],
+    [NIHR_3,	35],
+    [NIHR_3,	67],
+    [NIHR_3,	72],
+    [NIHR_3,	75],
+    [NIHR_3,	84],
+    [NIHR_4,	7],
+    [NIHR_4,	9],
+    [NIHR_4,	13],
+    [NIHR_4,	19],
+    [NIHR_4,	26],
+    [NIHR_4,	55],
+    [NIHR_4,	100],
+    [NIHR_5,	22],
+    [NIHR_5,	28],
+    [NIHR_5,	62],
+    [NIHR_5,	74],
+    [NIHR_5,	76],
+    [NIHR_5,	79],
+    [NIHR_5,	83],
+    [NIHR_6,	10],
+    [NIHR_6,	29],
+    [NIHR_6,	36],
+    [NIHR_6,	49],
+    [NIHR_6,	52],
+    [NIHR_6,	56],
+    [NIHR_6,	71],
+    [NIHR_6,	80],
+    [NIHR_7,	40],
+    [NIHR_7,	85],
+    [NIHR_7,	91],
+    [NIHR_7,	93],
+    [NIHR_7,	95],
+    [NIHR_7,	96],
+    [NIHR_7,	99],
+    [NIHR_8,	2],
+    [NIHR_8,	27],
+    [NIHR_8,	42],
+    [NIHR_8,	45],
+    [NIHR_8,	58],
+    [NIHR_8,	60],
+    [NIHR_8,	65],
+    [NIHR_8,	81],
+    [NIHR_9,	39],
+    [NIHR_9,	54],
+    [NIHR_9,	61],
+    [NIHR_9,	66],
+    [NIHR_9,	68],
+    [NIHR_9,	78],
+    [NIHR_9,	88]])
+
+    return key_vals
+
+
