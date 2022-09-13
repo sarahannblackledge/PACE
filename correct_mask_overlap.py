@@ -106,14 +106,14 @@ def correct_overlap_nifti(fpath_prostate, fpath_bladder, fpath_rectum):
 
 
 #Single case example
-'''fpath_prostate = '/Users/sblackledge/Documents/ProKnow_database/RMH_proknow/proknowPACE/nifti_dump/masks3D/ProstateOnly/NIHR_1_MR37.nii'
-fpath_bladder = '/Users/sblackledge/Documents/ProKnow_database/RMH_proknow/proknowPACE/nifti_dump/masks3D/Bladder/NIHR_1_MR37.nii'
-fpath_rectum = '/Users/sblackledge/Documents/ProKnow_database/RMH_proknow/proknowPACE/nifti_dump/masks3D/Rectum/NIHR_1_MR37.nii'
+fpath_prostate = '/Users/sblackledge/Documents/ProKnow_database/RMH_proknow/proknowPACE/nifti_dump/masks3D/ProstateOnly/NIHR_1_MR11.nii'
+fpath_bladder = '/Users/sblackledge/Documents/ProKnow_database/RMH_proknow/proknowPACE/nifti_dump/masks3D/Bladder/NIHR_1_MR11.nii'
+fpath_rectum = '/Users/sblackledge/Documents/ProKnow_database/RMH_proknow/proknowPACE/nifti_dump/masks3D/Rectum/NIHR_1_MR11.nii'
 
-correct_overlap_nifti(fpath_prostate, fpath_bladder, fpath_rectum)'''
+correct_overlap_nifti(fpath_prostate, fpath_bladder, fpath_rectum)
 
 #Loop through directory
-dir_prostate = '/Users/sblackledge/Documents/ProKnow_database/RMH_proknow/proknowPACE/nifti_dump/masks3D/ProstateOnly'
+'''dir_prostate = '/Users/sblackledge/Documents/ProKnow_database/RMH_proknow/proknowPACE/nifti_dump/masks3D/ProstateOnly'
 dir_bladder = '/Users/sblackledge/Documents/ProKnow_database/RMH_proknow/proknowPACE/nifti_dump/masks3D/Bladder'
 dir_rectum = '/Users/sblackledge/Documents/ProKnow_database/RMH_proknow/proknowPACE/nifti_dump/masks3D/Rectum'
 
@@ -123,6 +123,6 @@ for file in os.listdir(dir_prostate):
         fpath_bladder = os.path.join(dir_bladder, file)
         fpath_rectum = os.path.join(dir_rectum, file)
 
-        correct_overlap_nifti(fpath_prostate, fpath_bladder, fpath_rectum)
+        correct_overlap_nifti(fpath_prostate, fpath_bladder, fpath_rectum)'''
 
 
