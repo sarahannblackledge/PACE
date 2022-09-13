@@ -164,12 +164,12 @@ def find_missing_datasets(db_id):
     if os.path.exists(study_path_dose):
         dose_image = sitk.ReadImage(study_path_dose)
     else:
-        scaling = dose_dicom[0x3004, 0xe].value
-        dose_image = sitk.ReadImage(dose_dicom[floc_el].value)
+        scaling = ref_dose[0x3004, 0xe].value
+        dose_image = sitk.ReadImage(ref_dose[floc_el].value)
         dose_image = sitk.Resample(dose_image, mr_image, sitk.AffineTransform(3), sitk.sitkLinear, 0.0,
                                    sitk.sitkFloat64)
         dose_image = dose_image * scaling
-        copy_dicom_tags(dose_image, dose_dicom, ignore_private=True)
+        copy_dicom_tags(dose_image, ref_dose, ignore_private=True)
         sitk.WriteImage(dose_image, study_path_dose, True)
 
     # Create the RTstruct
@@ -189,7 +189,7 @@ def find_missing_datasets(db_id):
         print('Something dodgy with your sitk mask list')
 
 
-db_id = '50'
+db_id = '11'
 find_missing_datasets(db_id)
 
 
