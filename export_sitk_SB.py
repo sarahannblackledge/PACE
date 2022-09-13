@@ -137,6 +137,7 @@ for dose_dicom in dose_dicoms:
             continue
 
         #Look up patient id based on database ID number. Hard coded in 'db_id_key.xlsx'
+
         db_id = ref_plan.StudyDescription
         print(db_id)
         id_arr = key()[:,1]
@@ -153,7 +154,8 @@ for dose_dicom in dose_dicoms:
             print('junk')
             counter = counter + 1
             pat_id = 'unknown_%d'%counter
-            db_id = '0'
+            db_id = str(counter)
+            counter = counter + 1
 
         # Now save!
         output_directory = os.path.join(pat_directory, "nifti_dump")
