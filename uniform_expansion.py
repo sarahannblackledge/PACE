@@ -1,15 +1,18 @@
 import SimpleITK as sitk
 import numpy as np
-import skimage
-
+import os
 
 ''' Uniformly expands structure by user-specified amount (mm)
 inputs:
     1. fpath_nifti_mask: str - full file name of nifi file of mask of structure that should be uniformly expanded
     2. mm_expansion: int - number of millimeters to uniformly expand structure
+    3. save_flag: 0 if you don't want to save, 1 if you want to write as nifti
 outut:
     1. expanded_array: np array [slices, x, y] of expanded mask. '''
-def uniform_expansion(fpath_nifti_mask, mm_expansion):
+
+
+
+def uniform_expansion(fpath_nifti_mask, mm_expansion, save_flag):
     im_sitk = sitk.ReadImage(fpath_nifti_mask)
     im_array = sitk.GetArrayFromImage(im_sitk)
 
@@ -20,31 +23,26 @@ def uniform_expansion(fpath_nifti_mask, mm_expansion):
     mm_expansion3d = np.array([mm_expansion, mm_expansion, mm_expansion])
     px_expansion = mm_expansion3d/px_spacing
     px_expansion_rounded = np.round(px_expansion)
-    px_expansion_int = px_expansion_rounded.astype(int)
+    px_expansion_int = (px_expansion_rounded.astype(int)).tolist()
 
-    #Uniformly expand array
-    TF = np.all(px_expansion_int == px_expansion_int[0])
+    #Dilate using sitk
+    dilate_filter = sitk.BinaryDilateImageFilter()
+    dilate_filter.SetKernelType(sitk.sitkBall)
+    dilate_filter.SetKernelRadius((px_expansion_int[0], px_expansion_int[1], px_expansion_int[2]))
+    dilated_mask = dilate_filter.Execute(im_sitk)
 
-    if TF: #If expansion is the same number of pixels in each direction, can operate in 3D
-        expanded_array = skimage.segmentation.expand_labels(im_array, distance=px_expansion[0])
+    #Write as nifti [optional]
+    if save_flag == 1:
+        orig_path = os.path.splitext(fpath_nifti_mask)[0]
+        new_path = orig_path + '_expanded.nii'
+        sitk.WriteImage(dilated_mask, new_path)
 
-    elif px_expansion_rounded[0] == px_expansion_rounded[1]: #if isotropic pixel size in axial orientation, but different slice thickness
-        expanded_array = np.zeros(im_array.shape)
-        #Expand in axial plan (lr and ap)
-        SI_extent = []
-        for slice in range(im_array.shape[0]):
-            expanded_slice = skimage.segmentation.expand_labels(im_array[slice, :, :], distance=px_expansion[0])
-            expanded_array[slice, :, :] = expanded_slice
-            TF_2 = np.any(im_array[slice, :, :])
-            SI_extent.append(TF_2)
-        #Expand in Sup/inf plan
-        orig_inds = [i for i, x in enumerate(SI_extent) if x]
-        expanded_array[orig_inds[0]-1, :, :] = expanded_array[orig_inds[0], :, :]
-        expanded_array[orig_inds[-1] + 1, :, :] = expanded_array[orig_inds[-1], :, :]
-
-    return expanded_array
+    return dilated_mask
 
 
+#fpath_nifti_mask = '/Users/sblackledge/Documents/ProKnow_database/RMH_proknow/proknowPACE/nifti_dump/masks3D/ProstateOnly/NIHR_1_MR11.nii'
+#mm_expansion = 10
+#dilated_mask = uniform_expansion(fpath_nifti_mask, mm_expansion, 1)
 
 
 
