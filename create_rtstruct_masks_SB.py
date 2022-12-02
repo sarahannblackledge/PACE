@@ -33,7 +33,8 @@ def create_rtstruct_masks(rtstruct_dicom, ct_image):
 
     # masks_of_interest = ['CTVpsv_4000', 'CTVsv', 'PTVpsv_3625', 'PTVsv_3000', 'Bladder', 'Rectum', 'Bowel', 'Prostate', 'PenileBulb', 'SeminalVes']
     # masks_of_interest = ['Rectum', 'Bowel', 'Bladder', 'Penile_Bulb', 'ProstateOnly', 'SVsOnly', 'CTV_Prostate', 'CTV_SVs', 'CTV_Prostate+SVs', 'PTV_4860']
-    masks_of_interest = ['ProstateOnly', 'SVsOnly', 'Rectum', 'Bladder', 'Bowel']
+    #masks_of_interest = ['ProstateOnly', 'SVsOnly', 'Rectum', 'Bladder', 'Bowel']
+    masks_of_interest = [' PTVpsv_3625', 'CTV_Prostate+SVs']
 
     orX, orY, orZ = ct_image.GetOrigin()
     szX, szY, szZ = ct_image.GetSize()
@@ -46,6 +47,26 @@ def create_rtstruct_masks(rtstruct_dicom, ct_image):
     mask_idx = 0
     contour_sequences = rtstruct_dicom.ROIContourSequence
 
+    #Check to see whether desired contour(s) exist
+    contour_names = []
+    for item in contour_sequences:
+        structure_idx = item[0x30060084].value
+        contour_name = structure_sets[structure_idx][0x30060026].value
+        contour_names.append(contour_name)
+
+    for m in masks_of_interest:
+        indices = 0
+        if m in contour_names:
+            print(f"{m} exists in structure set")
+            indices = indices + 1
+        else:
+            print(f"{m} does not exist in structure set")
+
+    if indices < 1:
+        print('exiting code')
+
+        return []
+
     # For each contour itemized in ROIContourSequence tag
     for item in contour_sequences:
         roi_mask = np.zeros(ct_image.GetSize(), dtype="int")
@@ -53,11 +74,8 @@ def create_rtstruct_masks(rtstruct_dicom, ct_image):
         structure_idx = item[0x30060084].value
         contour_name = structure_sets[structure_idx][0x30060026].value
 
-
-
         if contour_name in masks_of_interest:
             names[mask_idx] = contour_name
-            print(contour_name)
 
             #For each slice comprising stucture
             for j in contourSequence:
@@ -80,7 +98,6 @@ def create_rtstruct_masks(rtstruct_dicom, ct_image):
 
             masks.append(roi_mask)
             mask_idx += 1
-
 
     masks = np.array(masks).transpose((3, 2, 1, 0))
     mask_images = []
