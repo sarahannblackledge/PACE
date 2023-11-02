@@ -116,7 +116,22 @@ def key():
     [NIHR_9,	66],
     [NIHR_9,	68],
     [NIHR_9,	78],
-    [NIHR_9,	88]])
+    [NIHR_9,	88],
+    [NIHR_1, 201],
+    [NIHR_2, 202],
+    [NIHR_3, 203],
+    [NIHR_4, 204],
+    [NIHR_5, 205],
+    [NIHR_6, 206],
+    [NIHR_7, 207],
+    [NIHR_8, 208],
+    [NIHR_9, 209],
+    [NIHR_10, 210],
+    [NIHR_11, 211],
+    [NIHR_12, 212],
+    [NIHR_13, 213],
+    [NIHR_14, 214]])
+
 
     return key_vals
 
