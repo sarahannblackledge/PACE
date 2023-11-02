@@ -121,9 +121,8 @@ def find_missing_datasets(db_id):
             print('RTstruct with desired uid found')
     if ref_rtstruct is None:
         print("Could not find a rtstruct for dose cube: %s" % ref_rtstruct_uid_str)
-
-    # Find the MR images
-    ref_mr_series_uid = ref_rtstruct[0x3006, 0x10][0][0x3006,0x12][0][0x3006, 0x14][0][0x20,0xe].value
+        # Find the MR images
+    ref_mr_series_uid = ref_rtstruct[0x3006, 0x10][0][0x3006, 0x12][0][0x3006, 0x14][0][0x20, 0xe].value
     ref_mr_series_uid_str = str(ref_mr_series_uid)
     for series_uid in mr_dicoms:
         if series_uid == ref_mr_series_uid:
@@ -131,6 +130,7 @@ def find_missing_datasets(db_id):
             print('Found corresponding MRI')
     if ref_mr_study is None:
         print("Could not find a MR series for dose cube: %s" % ref_mr_series_uid_str)
+
 
     # Now save!
     output_directory = os.path.join(pat_directory, "nifti_dump")
