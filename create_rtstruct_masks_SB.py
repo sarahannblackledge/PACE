@@ -33,8 +33,9 @@ def create_rtstruct_masks(rtstruct_dicom, ct_image):
 
     # masks_of_interest = ['CTVpsv_4000', 'CTVsv', 'PTVpsv_3625', 'PTVsv_3000', 'Bladder', 'Rectum', 'Bowel', 'Prostate', 'PenileBulb', 'SeminalVes']
     # masks_of_interest = ['Rectum', 'Bowel', 'Bladder', 'Penile_Bulb', 'ProstateOnly', 'SVsOnly', 'CTV_Prostate', 'CTV_SVs', 'CTV_Prostate+SVs', 'PTV_4860']
-    #masks_of_interest = ['ProstateOnly', 'SVsOnly', 'Rectum', 'Bladder', 'Bowel']
-    masks_of_interest = [' PTVpsv_3625', 'CTV_Prostate+SVs']
+    masks_of_interest = ['ProstateOnly', 'SVsOnly', 'Rectum', 'Bladder', 'Bowel']
+    #masks_of_interest = ['Prostate', 'SeminalVes', 'Rectum', 'Bladder', 'Bowel']
+    #masks_of_interest = [' PTVpsv_3625', 'CTV_Prostate+SVs']
 
     orX, orY, orZ = ct_image.GetOrigin()
     szX, szY, szZ = ct_image.GetSize()
@@ -53,6 +54,7 @@ def create_rtstruct_masks(rtstruct_dicom, ct_image):
         structure_idx = item[0x30060084].value
         contour_name = structure_sets[structure_idx][0x30060026].value
         contour_names.append(contour_name)
+        print(contour_name)
 
     for m in masks_of_interest:
         indices = 0
