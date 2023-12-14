@@ -58,6 +58,7 @@ def DICOMRawData_to_nifti(ct_directory, save_dir, patient_name):
     # Load in the ct dicoms, REG dicoms, and RTSTRUCT dicoms as separate lists
     ct_dicoms = {}
     dose = {}
+    scaling = {}
 
     counter = 0
 
@@ -89,11 +90,14 @@ def DICOMRawData_to_nifti(ct_directory, save_dir, patient_name):
 
             if modality == 'RTDOSE':
                 counter = counter + 1
+                print(counter)
                 dose_dcm = dicom.read_file(dicom_path, stop_before_pixels=True)
                 dose_dcm.add_new(floc_el, "ST", dicom_path)
+                dose_grid_scaling = np.float64(dose_dcm.DoseGridScaling)
 
                 dose_by_beam = sitk.ReadImage([dose_dcm[floc_el].value])
                 dose[counter] = dose_by_beam
+                scaling[counter] = dose_grid_scaling
         except:
             raise
 
@@ -127,21 +131,33 @@ def DICOMRawData_to_nifti(ct_directory, save_dir, patient_name):
 
     #Sum the dose from the individual beam angles
     for i, angle in enumerate(dose):
-        dose_sitk = dose[angle]
+        dose_sitk = dose[i+1]
         dose_arr = sitk.GetArrayFromImage(dose_sitk)
-        total_dose = total_dose + dose_arr
+        dose_arr2 = dose_arr*scaling[i+1]
+        total_dose = total_dose + dose_arr2
+
+
+
+    #Check; bug where dose is double when computed from individual beam angles; check max dose and divide by 2 if necessary
+    max_dose = np.amax(total_dose)
+    print('computed max dose is: ' + str(max_dose))
+    if max_dose > 55 and i > 1:
+        total_dose = total_dose/2
+        print('correction factor applied. New max dose is: ' + str(np.amax(total_dose)))
 
     #Save as nifti
     dose_sitk2 = sitk.GetImageFromArray(total_dose, isVector=False)
     dose_sitk2.CopyInformation(dose[1])
     savepath = os.path.join(dose_dir, fname)
+    print(savepath)
     sitk.WriteImage(dose_sitk2, savepath, useCompression=True)
 
 
 ################################################################################
 #Bethany dataset example
-patient_name = 'PER042 MR1 prop MR12'
+patient_name = 'PAC23004 CT Ref prop MR8'
 ct_directory = os.path.join('/Users/sblackledge/Documents/MRL_plan_database/monaco_dump', patient_name)
 save_dir = '/Users/sblackledge/Documents/MRL_plan_database/nifti_dump'
 #Run
 DICOMRawData_to_nifti(ct_directory, save_dir, patient_name)
+
