@@ -5,9 +5,15 @@ import numpy as np
 import csv
 import pandas as pd
 import openpyxl
-
+import re
 
 #Convert pdf to csv
+def typo_correct(string, char):
+    #Looks for cases with two characters (i.e. underscores) and overwrites as one
+    pattern = char + '{2,}'
+    string = re.sub(pattern, char, string)
+    return string
+
 def pdf_to_csv(fraction_name, patient_dir):
 
     ext1 = '.pdf'
@@ -39,6 +45,11 @@ def pdf_to_csv(fraction_name, patient_dir):
     for i, name in enumerate(structures):
         if np.char.str_len(name) < 1:
             structures[i] = structures[i-1]
+
+    #replaces all instances of double underscore with single underscore
+    for i, name in enumerate(structures):
+        fixed_str = typo_correct(name, '_')
+        structures[i] = fixed_str
 
     data_array[:, 0] = structures
 
@@ -91,17 +102,32 @@ def populate_dose_stat_xlsx(patient_dir, fraction):
         std = workbook['Sheet1']
         workbook.remove(std)
 
+    # Set active worksheet to dose criteria and extract thresholds
+    active_sheet = workbook['dose criteria']
+    firstRow = 1
+    firstCol = 2
+    nCols = 4
+    nRows = 10
+
+    allCells = np.array([[cell.value for cell in row] for row in active_sheet.iter_rows()])
+    thresholds = allCells[(firstRow):(firstRow + nRows), (firstCol):(firstCol + nCols)]
+
+    #Define sheetnames and row index where data from each fraction should be written
     sheetnames = ['Fraction 1', 'Fraction 2', 'Fraction 3', 'Fraction 4', 'Fraction 5']
     row_start_inds = [3, 17, 31, 45, 59, 73]
+    threshold_labels = ['Optimal', 'Mandatory', 'Marginal', 'Unacceptable']
 
-
-    #Extract data from DVS stats excel file - convert to pandas dataframe
+    #Extract data from DVH stats excel file - convert to pandas dataframe
     fpath_dvh = os.path.join(patient_dir, patient_name + "_DVH stats_" + str(fraction) + '.xlsx')
     df = pd.read_excel(fpath_dvh)
     dfn = df.to_numpy()
     dfn_structures = dfn[:,0]
     dfn_criteria = dfn[:, 9]
     dfn_criteria = list(dfn_criteria)
+
+    # Set active worksheet for specified fraction
+    active_sheet = workbook[sheetnames[fraction - 1]]
+    print(active_sheet)
 
     #Correct structures names so all on one line (some are multiline by default)
     for i, s in enumerate(dfn_structures):
@@ -115,66 +141,201 @@ def populate_dose_stat_xlsx(patient_dir, fraction):
 
     for f in range(fraction + 1):
         structures = [structure_basename + suffixes[f] for structure_basename in structure_basenames]
-        print(structures)
+        #print(structures)
+
+        #Initialize vectors to store DVHstats and score (whether optimal, mandatory, marginal, or unacceptable)
+        stats = []
 
         #Extract dose stats for online plan
         #CTV
         ind0 = np.where(dfn_structures == structures[0])[0][0]
-        stats = []
         ctvstats = float(dfn[ind0, 7])
         stats.append(ctvstats)
 
         #PTV
         inds_structures = np.where(dfn_structures == structures[1])[0] #rows containing requested structure
+        if inds_structures.size == 0:
+            print('No structure found in excel file matching ', structures[1])
         criteria = ['V3625', 'D98']
         col_inds = [7, 8]
         for i, c in enumerate(criteria):
             inds_criteria = find_criteria_index(dfn_criteria, c)
-            ind = np.intersect1d(inds_structures, inds_criteria)[0]
-            val = float(dfn[ind, col_inds[i]])
-            stats.append(val)
+            try:
+                ind = np.intersect1d(inds_structures, inds_criteria)[0]
+                val = float(dfn[ind, col_inds[i]])
+                stats.append(val)
+            except:
+                print(structures[1], ' does not have criteria ', c)
+                val = float("nan")
+                stats.append(val)
 
         #Bladder
         inds_structures = np.where(dfn_structures == structures[2])[0]
+        if inds_structures.size == 0:
+            print('No structure found in excel file matching ', structures[2])
         criteria = ['V3700', 'V1810']
         col_inds = [6, 7]
         for i, c in enumerate(criteria):
             inds_criteria = find_criteria_index(dfn_criteria, c)
-            ind = np.intersect1d(inds_structures, inds_criteria)[0]
-            val = float(dfn[ind, col_inds[i]])
-            stats.append(val)
+            try:
+                ind = np.intersect1d(inds_structures, inds_criteria)[0]
+                val = float(dfn[ind, col_inds[i]])
+                stats.append(val)
+            except:
+                print(structures[2], ' does not have criteria ', c)
+                val = float("nan")
+                stats.append(val)
+
 
         #Rectum
         inds_structures = np.where(dfn_structures == structures[3])[0]
+        if inds_structures.size == 0:
+            print('No structure found in excel file matching ', structures[3])
         criteria = ['V3600', 'V2900', 'V1810']
         col_inds = [6, 7, 7]
         for i, c in enumerate(criteria):
             inds_criteria = find_criteria_index(dfn_criteria, c)
-            ind = np.intersect1d(inds_structures, inds_criteria)[0]
-            val = float(dfn[ind, col_inds[i]])
-            stats.append(val)
+            try:
+                ind = np.intersect1d(inds_structures, inds_criteria)[0]
+                val = float(dfn[ind, col_inds[i]])
+                stats.append(val)
+            except:
+                print(structures[3], ' does not have criteria ', c)
+                val = float("nan")
+                stats.append(val)
 
         #Bowel
         inds_structures = np.where(dfn_structures == structures[4])[0]
+        if inds_structures.size == 0:
+            print('No structure found in excel file matching ', structures[4])
         criteria = ['V3000', 'V1810']
         col_inds = [6, 6]
         for i, c in enumerate(criteria):
             inds_criteria = find_criteria_index(dfn_criteria, c)
-            ind = np.intersect1d(inds_structures, inds_criteria)[0]
-            val = float(dfn[ind, col_inds[i]])
-            stats.append(val)
+            try:
+                ind = np.intersect1d(inds_structures, inds_criteria)[0]
+                val = float(dfn[ind, col_inds[i]])
+                stats.append(val)
+            except:
+                print(structures[4], ' does not have criteria ', c)
+                val = float("nan")
+                stats.append(val)
 
-        print(stats)
+        #Determine score for each dose stat
+        score = []
 
-        #Set active worksheet for specified fraction
-        active_sheet = workbook[sheetnames[fraction-1]]
-        print(active_sheet)
+        #CTV
+        jj = 0
+        if stats[jj] >= thresholds[jj, 0]:
+            score_i = threshold_labels[0]
+        elif thresholds[jj, 1] <= stats[jj] < thresholds[jj, 0]:
+            score_i = threshold_labels[1]
+        elif thresholds[jj, 2] <= stats[jj] < thresholds[jj, 1]:
+            score_i = threshold_labels[2]
+        elif stats[jj] < thresholds[jj, 2]:
+            score_i = threshold_labels[3]
+
+        score.append(score_i)
+
+        #Vol (%) PTVpsv_3625 covered by 36.25 Gy
+        jj = 1
+        if stats[jj] >= thresholds[jj, 0]:
+            score_i = threshold_labels[0]
+        elif thresholds[jj, 1] <= stats[jj] < thresholds[jj, 0]:
+            score_i = threshold_labels[1]
+        elif thresholds[jj, 2] <= stats[jj] < thresholds[jj, 1]:
+            score_i = threshold_labels[2]
+        elif stats[jj] < thresholds[jj, 2]:
+            score_i = threshold_labels[3]
+
+        score.append(score_i)
+
+        #Dose (Gy) covering 98% of PTVpsv_3625
+        jj = 2
+        if stats[jj] >= thresholds[jj, 0]:
+            score_i = threshold_labels[0]
+        elif thresholds[jj, 1] <= stats[2] < thresholds[jj, 0]:
+            score_i = threshold_labels[1]
+        elif stats[jj] < thresholds[jj, 1]:
+            score_i = threshold_labels[3]
+
+        score.append(score_i)
+
+        #Volume(cc) of bladder covered by 37Gy
+        jj = 3
+        if stats[jj] <= thresholds[jj, 0]:
+            score_i = threshold_labels[0]
+        elif thresholds[jj, 0] < stats[jj] <= thresholds[jj, 1]:
+            score_i = threshold_labels[1]
+        elif stats[jj] > thresholds[jj, 1]:
+            score_i = threshold_labels[3]
+
+        score.append(score_i)
+
+        #Volume (%) of bladder covered by 18.10Gy
+        jj = 4
+        if stats[jj] <= thresholds[jj, 0]:
+            score_i = threshold_labels[0]
+        else:
+            score_i = threshold_labels[3]
+
+        score.append(score_i)
+
+        #Volume (cc) of rectum covered by 36 Gy
+        jj = 5
+        if stats[jj] <= thresholds[jj, 0]:
+            score_i = threshold_labels[0]
+        elif thresholds[jj, 0] < stats[jj] <= thresholds[jj, 1]:
+            score_i = threshold_labels[1]
+        elif stats[jj] > thresholds[jj, 1]:
+            score_i = threshold_labels[3]
+
+        score.append(score_i)
+
+        #Volume(%) of Rectum covered by 29 Gy
+        jj = 6
+        if stats[jj] <= thresholds[jj, 0]:
+            score_i = threshold_labels[0]
+        else:
+            score_i = threshold_labels[3]
+
+        score.append(score_i)
+
+        #Volume(%) of Rectum covered by 18.10 Gy
+        jj = 7
+        if stats[jj] <= thresholds[jj, 0]:
+            score_i = threshold_labels[0]
+        else:
+            score_i = threshold_labels[3]
+
+        score.append(score_i)
+
+        #Volume (cc) of Bowel covered by 30 Gy
+        jj = 8
+        if stats[jj] <= thresholds[jj, 0]:
+            score_i = threshold_labels[0]
+        else:
+            score_i = threshold_labels[3]
+
+        score.append(score_i)
+
+        #Volume (cc) of Bowel coveredy by 18.10 gy
+        jj = 9
+        if stats[jj] <= thresholds[jj, 0]:
+            score_i = threshold_labels[0]
+        else:
+            score_i = threshold_labels[3]
+
+        score.append(score_i)
+
+        #Write stats vector to excel file
         row_start = row_start_inds[f]
         for ii, j in enumerate(stats):
             val = round(row_start + ii)
             active_sheet.cell(row=val, column=3).value = j
+            active_sheet.cell(row=val, column=4).value = score[ii]
         workbook.save(fpath_output_file)
-
+##################################################################################
 
 #Loop through fractions
 patient_name = 'PAC2011'
@@ -188,7 +349,7 @@ for fraction in range(1, 6):
 #Specific fraction
 patient_name = 'PAC2011'
 patient_dir = os.path.join('/Users/sblackledge/Documents/audit_evolutivePOTD', patient_name)
-fraction = 1
+fraction = 5
 fraction_name = patient_name +'_DVH stats_' + str(fraction)
 
 pdf_to_csv(fraction_name, patient_dir)
