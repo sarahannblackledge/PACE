@@ -8,6 +8,7 @@ import openpyxl
 import re
 
 #Convert pdf to csv
+
 def typo_correct(string, char):
     #Looks for cases with two characters (i.e. underscores) and overwrites as one
     pattern = char + '{2,}'
@@ -20,17 +21,33 @@ def pdf_to_csv(fraction_name, patient_dir):
     ext2 = '.csv'
 
     input_path = os.path.join(patient_dir, fraction_name + ext1)
-    output_path = os.path.join(patient_dir, fraction_name + '_temp' + ext2)
+    output_path = os.path.join(patient_dir, fraction_name + '_temp' + ext2) #temporary csv file
+    fpath = os.path.join(patient_dir, fraction_name + '.xlsx') #Final excel file
 
-    tabula.convert_into(input_path, output_path, output_format='csv', pages='all')
+
+    TF = os.path.isfile(output_path) #Check if temp CSV file exists
+    TF2 = os.path.isfile(fpath) #Check if final excel file exists. Will only exist if previous run successful
+
+    #If final excel file exists, don't proceed with code.
+    if TF2:
+        return
+
+    if not TF and not TF2: #Only generate new csv if (1) no csv already exists and (2) no final excel file exists
+        print('generating temp csv')
+        tabula.convert_into(input_path, output_path, output_format='csv', pages='all')
 
     #Fix output so structure labels all on one line, and every line labelled
     with open(output_path, 'r') as f:
         reader = csv.reader(f)
         data = list(reader)
-        data_array = np.array(data)
+        data_array = []
+        try:
+            data_array = np.array(data)
+        except:
+            print('check columns of temp csv file. Edit, save, and re-run')
+            return
 
-    structures = data_array[:,0]
+    structures = data_array[:, 0]
 
     #Fix hanging characters
     #rule: if number of characters in string < 4, then should be appended to previous line
@@ -65,7 +82,6 @@ def pdf_to_csv(fraction_name, patient_dir):
 
     #Save as new xlsx file
     df = pd.DataFrame(data_array)
-    fpath = os.path.join(patient_dir, fraction_name + '.xlsx')
     df.to_excel(fpath, index=False)
 
     #Delete temporary csv file
@@ -83,7 +99,138 @@ def find_criteria_index(dfn_criteria, desired_str):
 
     return inds
 
-def populate_dose_stat_xlsx(patient_dir, fraction):
+def Gy_to_cGY(patient_dir, fraction_name):
+    fpath_fraction = os.path.join(patient_dir, fraction_name + '.xlsx')
+    df_fraction = pd.read_excel(fpath_fraction)
+
+    #Determine units
+    testcol = np.asarray(df_fraction.iloc[0:10,3])
+    cGy_exist = False #Assume no cGy anywhere
+
+    for i in testcol:
+        if i == 'cGy':
+            print('Gy to cGy conversion in process')
+            cGy_exist = True #Change value to True only if at least one cell is cGy
+
+    if cGy_exist == True:
+        print('no need for conversion')
+        return
+
+    #convert dataframe to numpy array
+    fraction_arr = df_fraction.values
+
+    # Hard-code criteria dictionary
+    value_dict_nospaces = {
+        "V37Gy<=5cm3(+5cm3)": "V3700cGy <= 5 cm3 (+5 cm3)",
+        "V18.1Gy<=40%": "V1810cGy <= 40 %",
+        "V30Gy<=1cm3": "V3000cGy <= 1 cm3",
+        "V18.1Gy<=5cm3": "V1810cGy <= 5 cm3",
+        "V40Gy>=95%": "V4000cGy >= 95 %",
+        "V36.25Gy>=95%": "V3625cGy >= 95 %",
+        "D98%>=34.4Gy(-0.688Gy)": "D98% >= 3440 cGy (-0.688 Gy)",
+        "V36Gy<=1cm3(+1cm3)": "V3600cGy <= 1 cm3 (+1 cm3)",
+        "V29Gy<=20%": "V2900cGy <= 20 %",
+        "V18.1Gy<=50%": "V1810cGy <= 50 %"
+    }
+
+    # Convert ATP rows from Gy to cGy if necessary
+    if cGy_exist == False:
+        cols_to_multiply = [3, 4, 5, 8]
+        # Convert specified columns to integers, multiply by 100, and convert back to strings
+        for i in range(len(fraction_arr)):
+            try:
+                fraction_arr[i, cols_to_multiply] = np.round(fraction_arr[i, cols_to_multiply].astype(float) * 100).astype(str)
+            except:
+                continue
+
+        # Replace dose criteria strings
+        arr_str = fraction_arr.astype(str) #Convert to string
+        arr_str[:, 9] = np.char.replace(arr_str[:, 9], ' ', '')
+
+        for key, value in value_dict_nospaces.items():
+            print(key, value)
+            exists = np.any(np.isin(arr_str, key))
+            print(exists)
+            arr_str = np.char.replace(arr_str, key, value)
+
+        #Replace column unit labels
+        arr_str[1, 3] = 'cGy'
+        arr_str[1, 4] = 'cGy'
+        arr_str[1, 5] = 'cGy'
+        arr_str[1, 8] = 'cGy'
+
+        #Overwrite dataframe with updated values
+        df_fraction.iloc[0:, 0:] = arr_str
+        print('Gy to cGy conversion - complete')
+
+        # Overwrite original file with new dataframe
+        df_fraction.to_excel(fpath_fraction, index=False, header=False)
+
+        return
+
+def concatenate_excel_files(patient_dir, ATP_name, fraction_name):
+
+    fpath_ATP = os.path.join(patient_dir, ATP_name + '.xlsx')
+    fpath_fraction = os.path.join(patient_dir, fraction_name + '.xlsx')
+
+    #Read in excel files as dataframes
+    df_main = pd.read_excel(fpath_fraction)
+    df_ATP = pd.read_excel(fpath_ATP)
+
+    #Find rows in df_ATP where Column0 contains '_ATP'
+    filtered_rows = df_ATP[df_ATP.iloc[:,0].str.contains('_ATP')]
+
+    #Check whether ATP stuff already appended to _Vx file. If so, don't proceed with code
+    test = df_main[df_main.iloc[:,0].str.contains('_ATP')]
+    test_arr = test.values
+    if len(test_arr) > 0:
+        return
+
+    #Convert dataframes to numpy arrays
+    main_arr = df_main.values
+    rows_arr = filtered_rows.values
+
+    #Hard-code criteria dictionary
+    value_dict = {
+        "V37Gy <= 5 cm3 (+5 cm3)" : "V3700cGy <= 5 cm3 (+5 cm3)",
+        "V18.1Gy <= 40 %" : "V1810cGy <= 40 %",
+        "V30Gy <= 1 cm3" : "V3000cGy <= 1 cm3",
+        "V18.1Gy <= 5 cm3" : "V1810cGy <= 5 cm3",
+        "V40Gy >= 95 %" : "V4000cGy >= 95 %",
+        "V36.25Gy >= 95 %" : "V3625cGy >= 95 %",
+        "D98% >= 34.4 Gy (-0.688 Gy)": "D98% >= 3440 cGy (-0.688 Gy)",
+        "V36Gy <= 1 cm3 (+1 cm3)": "V3600cGy <= 1 cm3 (+1 cm3)",
+        "V29Gy <= 20 %": "V2900cGy <= 20 %",
+        "V18.1Gy <= 50 %": "V1810cGy <= 50 %"
+    }
+
+    #Convert ATP rows from Gy to cGy if necessary
+    val_unit = df_ATP.iloc[2, 3]
+    if val_unit == 'Gy':
+        cols_to_multiply = [3, 4, 5, 8]
+        # Convert specified columns to integers, multiply by 10, and convert back to strings
+        rows_arr[:, cols_to_multiply] = np.round(rows_arr[:, cols_to_multiply].astype(float) * 100).astype(str)
+        print('Gy to cGy conversion - complete')
+
+        arr_str = rows_arr.astype(str)
+        #Replace dose criteria strings
+        for key, value in value_dict.items():
+            arr_str = np.char.replace(arr_str, key, value)
+        rows_arr = arr_str
+
+    new_arr2 = np.vstack((main_arr, rows_arr))
+
+    #Convert concatenated array back into dataframe
+    column_names = df_main.columns.tolist()
+    df_new = pd.DataFrame(new_arr2, columns=column_names)
+
+    #Overwrite original file with new dataframe, including appended ATP rows
+    df_new.to_excel(fpath_fraction, index=False, header=False)
+
+    return
+
+############################################################################################
+def populate_dose_stat_xlsx(patient_dir, fraction, ATS):
     #get patient name
     patient_name = os.path.split(patient_dir)[1]
 
@@ -114,13 +261,27 @@ def populate_dose_stat_xlsx(patient_dir, fraction):
 
     #Define sheetnames and row index where data from each fraction should be written
     sheetnames = ['Fraction 1', 'Fraction 2', 'Fraction 3', 'Fraction 4', 'Fraction 5']
-    row_start_inds = [3, 17, 31, 45, 59, 73]
+    row_start_inds = [3, 17, 31, 45, 59, 73, 87]
     threshold_labels = ['Optimal', 'Mandatory', 'Marginal', 'Unacceptable']
 
     #Extract data from DVH stats excel file - convert to pandas dataframe
-    fpath_dvh = os.path.join(patient_dir, patient_name + "_DVH stats_" + str(fraction) + '.xlsx')
+    if ATS == 1:
+        fpath_dvh = os.path.join(patient_dir, patient_name + '_DVH stats_' + str(fraction) + 'V.xlsx')
+        suffixes = ['', '_V', '_CT', '_MR1', '_MR2', '_MR3', '_MR4']
+        delivery_type = 'Delivery type: ATS'
+    elif ATS == 0:  # ATP of ATS
+        fpath_dvh = os.path.join(patient_dir, patient_name + '_DVH stats_' + str(fraction) + 'Vx.xlsx')
+        suffixes = ['', '_ATP', '_CT', '_MR1', '_MR2', '_MR3', '_MR4']
+        delivery_type = 'Delivery type: ATP of ATS'
+    elif ATS == 2:
+        fpath_dvh = os.path.join(patient_dir, patient_name + '_DVH stats_' + str(fraction) + '.xlsx')
+        suffixes = ['', '_CT', '_MR1', '_MR2', '_MR3', '_MR4']
+        delivery_type = 'Delivery type: unknown'
+
     df = pd.read_excel(fpath_dvh)
     dfn = df.to_numpy()
+    #sf = 1
+
     dfn_structures = dfn[:,0]
     dfn_criteria = dfn[:, 9]
     dfn_criteria = list(dfn_criteria)
@@ -131,26 +292,31 @@ def populate_dose_stat_xlsx(patient_dir, fraction):
 
     #Correct structures names so all on one line (some are multiline by default)
     for i, s in enumerate(dfn_structures):
-        if "\n" in s:
-            temp= s.splitlines()
-            oneliner = "".join(temp)
-            dfn_structures[i] = oneliner
+        is_float = isinstance(s, float)
+        if not is_float:
+            if "\n" in s:
+                temp= s.splitlines()
+                oneliner = "".join(temp)
+                dfn_structures[i] = oneliner
 
     structure_basenames = ['CTVpsv_4000', 'PTVpsv_3625', 'Bladder', 'Rectum', 'Bowel']
-    suffixes = ['', '_CT', '_MR1', '_MR2', '_MR3', '_MR4']
 
-    for f in range(fraction + 1):
+
+    for f in range(fraction+2):
         structures = [structure_basename + suffixes[f] for structure_basename in structure_basenames]
-        #print(structures)
+        print(structures)
 
         #Initialize vectors to store DVHstats and score (whether optimal, mandatory, marginal, or unacceptable)
         stats = []
 
-        #Extract dose stats for online plan
+        #Extract dose stats for online plan (session)
         #CTV
-        ind0 = np.where(dfn_structures == structures[0])[0][0]
-        ctvstats = float(dfn[ind0, 7])
-        stats.append(ctvstats)
+        try:
+            ind0 = np.where(dfn_structures == structures[0])[0][0]
+            ctvstats = float(dfn[ind0, 7])
+            stats.append(ctvstats)
+        except:
+            print(f"Structure '{structures[0]}' does not exist")
 
         #PTV
         inds_structures = np.where(dfn_structures == structures[1])[0] #rows containing requested structure
@@ -220,6 +386,9 @@ def populate_dose_stat_xlsx(patient_dir, fraction):
                 print(structures[4], ' does not have criteria ', c)
                 val = float("nan")
                 stats.append(val)
+
+        #Adjust units
+        #stats = [i * sf for i in stats]
 
         #Determine score for each dose stat
         score = []
@@ -334,25 +503,55 @@ def populate_dose_stat_xlsx(patient_dir, fraction):
             val = round(row_start + ii)
             active_sheet.cell(row=val, column=3).value = j
             active_sheet.cell(row=val, column=4).value = score[ii]
+
+        #Write whether ATS or ATP of ATS plan
+        active_sheet.cell(row=1, column=2).value = delivery_type
+
         workbook.save(fpath_output_file)
 ##################################################################################
 
 #Loop through fractions
-patient_name = 'PAC2011'
+patient_name = 'PER022'
+# delivery_key: 1 if ATS used, 0 if ATP of ATS used. 2 otherwise. Check 'ATP' column in 'ROI propagation key.xlsx'
+delivery_key = [0, 0, 0, 0, 0]
 patient_dir = os.path.join('/Users/sblackledge/Documents/audit_evolutivePOTD', patient_name)
-for fraction in range(1, 6):
-    fraction_name = patient_name +'_DVH stats_' + str(fraction)
-    pdf_to_csv(fraction_name, patient_dir)
-    populate_dose_stat_xlsx(patient_dir, fraction)
 
+for fraction in range(1, len(delivery_key) + 1):
+    ATS = delivery_key[fraction-1]
+    if ATS == 1:
+        fraction_name = patient_name +'_DVH stats_' + str(fraction) + 'V'
+        pdf_to_csv(fraction_name, patient_dir)
+    elif ATS == 0: #ATP of ATS
+        fraction_name = patient_name + '_DVH stats_' + str(fraction) + 'Vx'
+        ATP_name = patient_name + '_DVH stats_' + str(fraction) + 'ATP'
+        pdf_to_csv(fraction_name, patient_dir)
+        pdf_to_csv(ATP_name, patient_dir)
+        # Append ATP structures (dose stats from verif contours propagated to delivered plan) to fraction_name excel file
+        concatenate_excel_files(patient_dir, ATP_name, fraction_name)
+
+    populate_dose_stat_xlsx(patient_dir, fraction, ATS)
 
 #Specific fraction
-patient_name = 'PAC2011'
+patient_name = 'PER093'
 patient_dir = os.path.join('/Users/sblackledge/Documents/audit_evolutivePOTD', patient_name)
 fraction = 5
-fraction_name = patient_name +'_DVH stats_' + str(fraction)
+#ATS: 1 if ATS used, 0 if ATP of ATS used. 2 otherwise. Check 'ATP' column in 'ROI propagation key.xlsx'
+ATS = 0
 
-pdf_to_csv(fraction_name, patient_dir)
+if ATS == 1:
+    fraction_name = patient_name + '_DVH stats_' + str(fraction) + 'V'
+    pdf_to_csv(fraction_name, patient_dir)
+    Gy_to_cGY(patient_dir, fraction_name)
+elif ATS == 0:  # ATP of ATS
+    fraction_name = patient_name + '_DVH stats_' + str(fraction) + 'Vx'
+    ATP_name = patient_name + '_DVH stats_' + str(fraction) + 'ATP'
+    pdf_to_csv(fraction_name, patient_dir)
+    pdf_to_csv(ATP_name, patient_dir)
+    Gy_to_cGY(patient_dir, fraction_name)
+    #Append ATP structures (dose stats from verif contours propagated to delivered plan) to fraction_name excel file
+    concatenate_excel_files(patient_dir, ATP_name, fraction_name)
+elif ATS == 2:
+    fraction_name = patient_name + '_DVH stats_' + str(fraction)
 
-populate_dose_stat_xlsx(patient_dir, fraction)
+populate_dose_stat_xlsx(patient_dir, fraction, ATS)
 
