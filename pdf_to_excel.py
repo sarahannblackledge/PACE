@@ -511,9 +511,9 @@ def populate_dose_stat_xlsx(patient_dir, fraction, ATS):
 ##################################################################################
 
 #Loop through fractions
-patient_name = 'PER022'
+patient_name = 'PER110'
 # delivery_key: 1 if ATS used, 0 if ATP of ATS used. 2 otherwise. Check 'ATP' column in 'ROI propagation key.xlsx'
-delivery_key = [0, 0, 0, 0, 0]
+delivery_key = [1, 1, 1, 0, 1]
 patient_dir = os.path.join('/Users/sblackledge/Documents/audit_evolutivePOTD', patient_name)
 
 for fraction in range(1, len(delivery_key) + 1):
@@ -531,12 +531,13 @@ for fraction in range(1, len(delivery_key) + 1):
 
     populate_dose_stat_xlsx(patient_dir, fraction, ATS)
 
+###################################################################################
 #Specific fraction
-patient_name = 'PER093'
+patient_name = 'PER110'
 patient_dir = os.path.join('/Users/sblackledge/Documents/audit_evolutivePOTD', patient_name)
 fraction = 5
 #ATS: 1 if ATS used, 0 if ATP of ATS used. 2 otherwise. Check 'ATP' column in 'ROI propagation key.xlsx'
-ATS = 0
+ATS = 1
 
 if ATS == 1:
     fraction_name = patient_name + '_DVH stats_' + str(fraction) + 'V'
