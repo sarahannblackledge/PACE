@@ -130,7 +130,8 @@ def Gy_to_cGY(patient_dir, fraction_name):
         "D98%>=34.4Gy(-0.688Gy)": "D98% >= 3440 cGy (-0.688 Gy)",
         "V36Gy<=1cm3(+1cm3)": "V3600cGy <= 1 cm3 (+1 cm3)",
         "V29Gy<=20%": "V2900cGy <= 20 %",
-        "V18.1Gy<=50%": "V1810cGy <= 50 %"
+        "V18.1Gy<=50%": "V1810cGy <= 50 %",
+        "V42Gy<=50%(+50%)": "V4200cGy <= 50 % (+50 %)"
     }
 
     # Convert ATP rows from Gy to cGy if necessary
@@ -266,15 +267,15 @@ def populate_dose_stat_xlsx(patient_dir, fraction, ATS):
 
     #Extract data from DVH stats excel file - convert to pandas dataframe
     if ATS == 1:
-        fpath_dvh = os.path.join(patient_dir, patient_name + '_DVH stats_' + str(fraction) + 'V.xlsx')
+        fpath_dvh = os.path.join(patient_dir, patient_name + '_DVH stats MR' + str(fraction) + '.xlsx')
         suffixes = ['', '_V', '_CT', '_MR1', '_MR2', '_MR3', '_MR4']
         delivery_type = 'Delivery type: ATS'
     elif ATS == 0:  # ATP of ATS
-        fpath_dvh = os.path.join(patient_dir, patient_name + '_DVH stats_' + str(fraction) + 'Vx.xlsx')
+        fpath_dvh = os.path.join(patient_dir, patient_name + '_DVH stats MR' + str(fraction) + '.xlsx')
         suffixes = ['', '_ATP', '_CT', '_MR1', '_MR2', '_MR3', '_MR4']
         delivery_type = 'Delivery type: ATP of ATS'
     elif ATS == 2:
-        fpath_dvh = os.path.join(patient_dir, patient_name + '_DVH stats_' + str(fraction) + '.xlsx')
+        fpath_dvh = os.path.join(patient_dir, patient_name + '_DVH stats MR' + str(fraction) + '.xlsx')
         suffixes = ['', '_CT', '_MR1', '_MR2', '_MR3', '_MR4']
         delivery_type = 'Delivery type: unknown'
 
@@ -509,50 +510,316 @@ def populate_dose_stat_xlsx(patient_dir, fraction, ATS):
 
         workbook.save(fpath_output_file)
 ##################################################################################
+def extract_dose_stats(structures, dfn_structures, structure_id, dfn_criteria, dfn):
+    structure_dict = {
+        #CTV
+        0: [
+            ['V4000'],
+            [7]
+        ],
+        #PTV
+        1: [
+            ['V3625', 'D98'],
+            [7, 8]
+        ],
+        #Bladder
+        2: [
+            ['V3700', 'V1810'],
+            [6, 7],
+        ],
+        #Rectum
+        3: [
+            ['V3600', 'V2900', 'V1810'],
+            [6, 7, 7]
+        ],
+        #Bowel
+        4: [
+            ['V3000', 'V1810'],
+            [6, 6]
+        ],
+        #Urethra
+        5: [
+            ['V4200'],
+            [7]
 
-#Loop through fractions
-patient_name = 'PER110'
-# delivery_key: 1 if ATS used, 0 if ATP of ATS used. 2 otherwise. Check 'ATP' column in 'ROI propagation key.xlsx'
-delivery_key = [1, 1, 1, 0, 1]
-patient_dir = os.path.join('/Users/sblackledge/Documents/audit_evolutivePOTD', patient_name)
+        ]
+    }
+    s = []
+    structure = structures[structure_id]
+    criteria = structure_dict[structure_id][0]
+    col_inds = structure_dict[structure_id][1]
+    inds_structures = np.where(dfn_structures == structure)[0]
+    if inds_structures.size == 0:
+        print('No structure found in excel file matching ', structure)
+    for i, c in enumerate(criteria):
+        inds_criteria = find_criteria_index(dfn_criteria, c)
+        try:
+            ind = np.intersect1d(inds_structures, inds_criteria)[0]
+            val = float(dfn[ind, col_inds[i]])
+            s.append(val)
+        except:
+            print(structure, ' does not have criteria ', c)
+            val = float("nan")
+            s.append(val)
 
-for fraction in range(1, len(delivery_key) + 1):
-    ATS = delivery_key[fraction-1]
-    if ATS == 1:
-        fraction_name = patient_name +'_DVH stats_' + str(fraction) + 'V'
-        pdf_to_csv(fraction_name, patient_dir)
-    elif ATS == 0: #ATP of ATS
-        fraction_name = patient_name + '_DVH stats_' + str(fraction) + 'Vx'
-        ATP_name = patient_name + '_DVH stats_' + str(fraction) + 'ATP'
-        pdf_to_csv(fraction_name, patient_dir)
-        pdf_to_csv(ATP_name, patient_dir)
-        # Append ATP structures (dose stats from verif contours propagated to delivered plan) to fraction_name excel file
-        concatenate_excel_files(patient_dir, ATP_name, fraction_name)
+    return s
 
-    populate_dose_stat_xlsx(patient_dir, fraction, ATS)
+def populate_dose_stat_ROInew_xlsx(patient_dir, fraction, ATS):
+    #get patient name
+    patient_name = os.path.split(patient_dir)[1]
+
+    #Duplicate template file for specified patient
+    fpath_template_file = '/Users/sblackledge/Documents/audit_evolutivePOTD/dose_stat_template.xlsx'
+    fpath_output_file = os.path.join(patient_dir, patient_name + '_dose_stats.xlsx')
+    TF = os.path.isfile(fpath_output_file)
+    if not TF:
+        shutil.copy(fpath_template_file, fpath_output_file)
+
+    # Open file for writing
+    workbook = openpyxl.load_workbook(fpath_output_file)
+    #Delete sheet1 (automatically created by openpyxl - annoying and unnecessary)
+    orig_sheetnames = workbook.sheetnames
+    if 'Sheet1' in orig_sheetnames:
+        std = workbook['Sheet1']
+        workbook.remove(std)
+
+    # Set active worksheet to dose criteria and extract thresholds
+    active_sheet = workbook['dose criteria']
+    firstRow = 1
+    firstCol = 2
+    nCols = 4
+    nRows = 11
+
+    allCells = np.array([[cell.value for cell in row] for row in active_sheet.iter_rows()])
+    thresholds = allCells[(firstRow):(firstRow + nRows), (firstCol):(firstCol + nCols)]
+
+    #Define sheetnames and row index where data from each fraction should be written
+    threshold_labels = ['Optimal', 'Mandatory', 'Marginal', 'Unacceptable']
+    row_start_inds = [33, 48, 63, 78, 93] #backwards propagations
+    sheetnames = ['Fraction 1', 'Fraction 2', 'Fraction 3', 'Fraction 4', 'Fraction 5']
+
+    #Extract data from DVH stats excel file - convert to pandas dataframe
+    if fraction == 0:
+        fpath_dvh = os.path.join(patient_dir, patient_name + '_DVH stats CT' + '.xlsx')
+        suffixes = ['_MR1', '_MR2', '_MR3', '_MR4', '_MR5']
+        sheetnames = ['Fraction 1', 'Fraction 2', 'Fraction 3', 'Fraction 4', 'Fraction 5']
+
+    else:
+        fpath_dvh = os.path.join(patient_dir, patient_name + '_DVH stats MR' + str(fraction) + '.xlsx')
+        sheet_str = f'Fraction {fraction}'
+        #Append sheetnames with fraction id twice to write session and verif dose stats
+        sheetnames.append(sheet_str)
+        sheetnames.append(sheet_str)
+
+        if ATS == 0:
+            suffixes = ['_MR1', '_MR2', '_MR3', '_MR4', '_MR5', '', '_ATP']
+        elif ATS == 1:
+            suffixes = ['MR1', 'MR2', 'MR3', 'MR4', 'MR5', '', '_V']
+
+
+    df = pd.read_excel(fpath_dvh)
+    dfn = df.to_numpy()
+    dfn_structures = dfn[:,0]
+    dfn_criteria = dfn[:, 9]
+    dfn_criteria = list(dfn_criteria)
+
+    #Correct structures names so all on one line (some are multiline by default)
+    for i, s in enumerate(dfn_structures):
+        is_float = isinstance(s, float)
+        if not is_float:
+            if "\n" in s:
+                temp= s.splitlines()
+                oneliner = "".join(temp)
+                dfn_structures[i] = oneliner
+
+
+    structure_basenames = ['CTVpsv_4000', 'PTVpsv_3625', 'Bladder', 'Rectum', 'Bowel', 'Urethra']
+
+    for fr in range(fraction, len(sheetnames)):
+    #for i, f in enumerate(suffixes):
+        active_sheet = workbook[sheetnames[fr]]
+        print(active_sheet)
+        f = suffixes[fr]
+        print(fr)
+
+
+        structures = [structure_basename + f for structure_basename in structure_basenames]
+
+        #Initialize vectors to store DVHstats and score (whether optimal, mandatory, marginal, or unacceptable)
+        stats = []
+
+        #Extract dose stats
+        for k in range(6):
+            s = extract_dose_stats(structures, dfn_structures, k, dfn_criteria, dfn)
+            stats.append(s)
+
+        #flatten
+        stats = [item for sublist in stats for item in (sublist if isinstance(sublist, list) else [sublist])]
+
+        #Determine score for each dose stat
+        score = []
+
+        #CTV
+        jj = 0
+        if stats[jj] >= thresholds[jj, 0]:
+            score_i = threshold_labels[0]
+        elif thresholds[jj, 1] <= stats[jj] < thresholds[jj, 0]:
+            score_i = threshold_labels[1]
+        elif thresholds[jj, 2] <= stats[jj] < thresholds[jj, 1]:
+            score_i = threshold_labels[2]
+        elif stats[jj] < thresholds[jj, 2]:
+            score_i = threshold_labels[3]
+
+        score.append(score_i)
+
+        #Vol (%) PTVpsv_3625 covered by 36.25 Gy
+        jj = 1
+        if stats[jj] >= thresholds[jj, 0]:
+            score_i = threshold_labels[0]
+        elif thresholds[jj, 1] <= stats[jj] < thresholds[jj, 0]:
+            score_i = threshold_labels[1]
+        elif thresholds[jj, 2] <= stats[jj] < thresholds[jj, 1]:
+            score_i = threshold_labels[2]
+        elif stats[jj] < thresholds[jj, 2]:
+            score_i = threshold_labels[3]
+
+        score.append(score_i)
+
+        #Dose (Gy) covering 98% of PTVpsv_3625
+        jj = 2
+        if stats[jj] >= thresholds[jj, 0]:
+            score_i = threshold_labels[0]
+        elif thresholds[jj, 1] <= stats[2] < thresholds[jj, 0]:
+            score_i = threshold_labels[1]
+        elif stats[jj] < thresholds[jj, 1]:
+            score_i = threshold_labels[3]
+
+        score.append(score_i)
+
+        #Volume(cc) of bladder covered by 37Gy
+        jj = 3
+        if stats[jj] <= thresholds[jj, 0]:
+            score_i = threshold_labels[0]
+        elif thresholds[jj, 0] < stats[jj] <= thresholds[jj, 1]:
+            score_i = threshold_labels[1]
+        elif stats[jj] > thresholds[jj, 1]:
+            score_i = threshold_labels[3]
+
+        score.append(score_i)
+
+        #Volume (%) of bladder covered by 18.10Gy
+        jj = 4
+        if stats[jj] <= thresholds[jj, 0]:
+            score_i = threshold_labels[0]
+        else:
+            score_i = threshold_labels[3]
+
+        score.append(score_i)
+
+        #Volume (cc) of rectum covered by 36 Gy
+        jj = 5
+        if stats[jj] <= thresholds[jj, 0]:
+            score_i = threshold_labels[0]
+        elif thresholds[jj, 0] < stats[jj] <= thresholds[jj, 1]:
+            score_i = threshold_labels[1]
+        elif stats[jj] > thresholds[jj, 1]:
+            score_i = threshold_labels[3]
+
+        score.append(score_i)
+
+        #Volume(%) of Rectum covered by 29 Gy
+        jj = 6
+        if stats[jj] <= thresholds[jj, 0]:
+            score_i = threshold_labels[0]
+        else:
+            score_i = threshold_labels[3]
+
+        score.append(score_i)
+
+        #Volume(%) of Rectum covered by 18.10 Gy
+        jj = 7
+        if stats[jj] <= thresholds[jj, 0]:
+            score_i = threshold_labels[0]
+        else:
+            score_i = threshold_labels[3]
+
+        score.append(score_i)
+
+        #Volume (cc) of Bowel covered by 30 Gy
+        jj = 8
+        if stats[jj] <= thresholds[jj, 0]:
+            score_i = threshold_labels[0]
+        else:
+            score_i = threshold_labels[3]
+
+        score.append(score_i)
+
+        #Volume (cc) of Bowel coveredy by 18.10 gy
+        jj = 9
+        if stats[jj] <= thresholds[jj, 0]:
+            score_i = threshold_labels[0]
+        else:
+            score_i = threshold_labels[3]
+
+        score.append(score_i)
+
+        # Urethra
+        jj = 10
+        if stats[jj] <= thresholds[jj, 0]:
+            score_i = threshold_labels[0]
+        else:
+            score_i = threshold_labels[1]
+
+        score.append(score_i)
+
+        #Write stats vector to excel file
+        if fr <= 4:
+            row_start_ind = row_start_inds[fraction]
+        elif fr == 5:
+            row_start_ind = 3
+        elif fr == 6:
+            row_start_ind = 18
+
+        for ii, j in enumerate(stats):
+            val = round(row_start_ind + ii)
+            active_sheet.cell(row=val, column=3).value = j
+            active_sheet.cell(row=val, column=4).value = score[ii]
+
+        #Write whether ATS or ATP of ATS plan
+        #active_sheet.cell(row=1, column=2).value = delivery_type
+
+        workbook.save(fpath_output_file)
 
 ###################################################################################
 #Specific fraction
-patient_name = 'PER110'
-patient_dir = os.path.join('/Users/sblackledge/Documents/audit_evolutivePOTD', patient_name)
-fraction = 5
+patient_name = 'PER022'
+patient_dir = os.path.join('/Users/sblackledge/Documents/audit_evolutivePOTD/ROInew', patient_name)
+#fraction = 0 for ref CT, 1 for MR1, 2 for MR2, etc.
+fraction = 1
 #ATS: 1 if ATS used, 0 if ATP of ATS used. 2 otherwise. Check 'ATP' column in 'ROI propagation key.xlsx'
-ATS = 1
+ATS = 0
 
-if ATS == 1:
-    fraction_name = patient_name + '_DVH stats_' + str(fraction) + 'V'
+#If assessing suitability of reference plan, ATP/ATS is irrelevant - just need to plop ROIs onto plan. Verif doesn't exist
+if fraction == 0:
+    fraction_name = patient_name + '_DVH stats CT'
     pdf_to_csv(fraction_name, patient_dir)
     Gy_to_cGY(patient_dir, fraction_name)
-elif ATS == 0:  # ATP of ATS
-    fraction_name = patient_name + '_DVH stats_' + str(fraction) + 'Vx'
-    ATP_name = patient_name + '_DVH stats_' + str(fraction) + 'ATP'
-    pdf_to_csv(fraction_name, patient_dir)
-    pdf_to_csv(ATP_name, patient_dir)
-    Gy_to_cGY(patient_dir, fraction_name)
-    #Append ATP structures (dose stats from verif contours propagated to delivered plan) to fraction_name excel file
-    concatenate_excel_files(patient_dir, ATP_name, fraction_name)
-elif ATS == 2:
-    fraction_name = patient_name + '_DVH stats_' + str(fraction)
+
+#Here, ATP/ATS is important for determining dose actually delivered on verif.
+else:
+    if ATS == 1: #ATS
+        fraction_name = patient_name + '_DVH stats MR' + str(fraction)
+        pdf_to_csv(fraction_name, patient_dir)
+        Gy_to_cGY(patient_dir, fraction_name)
+
+    elif ATS == 0:  # ATP of ATS
+        fraction_name = patient_name + '_DVH stats MR' + str(fraction)
+        ATP_name = patient_name + '_DVH stats MR' + str(fraction) + '_ATP'
+        pdf_to_csv(fraction_name, patient_dir)
+        pdf_to_csv(ATP_name, patient_dir)
+        Gy_to_cGY(patient_dir, fraction_name)
+        # Append ATP structures (dose stats from verif contours propagated to delivered plan) to fraction_name excel file
+        concatenate_excel_files(patient_dir, ATP_name, fraction_name)
 
 populate_dose_stat_xlsx(patient_dir, fraction, ATS)
 
