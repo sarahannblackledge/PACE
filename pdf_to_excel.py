@@ -7,13 +7,47 @@ import pandas as pd
 import openpyxl
 import re
 
-#Convert pdf to csv
-
 def typo_correct(string, char):
     #Looks for cases with two characters (i.e. underscores) and overwrites as one
     pattern = char + '{2,}'
     string = re.sub(pattern, char, string)
     return string
+def fix_csv_shifts(output_path):
+    df = pd.read_csv(output_path)
+    last_row = len(df)-1
+    #Check whether there are any non-NaN values in last column
+    TF = df['TEST'].notna().any()
+    counter = 0
+
+    while TF:
+        print(f'counter = {counter}')
+        counter = counter + 1
+
+        start_row = df['TEST'].first_valid_index() #Find index of first value jutting out into last row
+        last_nan_col_name = df.iloc[start_row][::-1].isna().idxmax() #Find corresponding column where row segment should be shifted
+        if start_row < last_row:
+            try:
+                end_row = df[last_nan_col_name].iloc[start_row:].first_valid_index()-1 #last row number that needs to be shifted
+            except:
+                end_row = last_row
+        else:
+            end_row = start_row
+
+        start_col_idx = df.columns.get_loc(last_nan_col_name)
+
+        # Shift the subsection of the DataFrame to the left by one column
+        df.iloc[start_row:end_row + 1, start_col_idx:-1] = df.iloc[start_row:end_row + 1, start_col_idx + 1:].values
+
+        # Optionally, set the last column of the shifted subsection to NaN
+        df.iloc[start_row:end_row + 1, -1] = float('nan')
+
+        TF = df['TEST'].notna().any()
+
+    #Delete last column of dataframe
+    df = df.drop(df.columns[-1], axis=1)
+
+    # Overwrite csv file with correctly aligned dataframe
+    df.to_csv(output_path, index=False)
 
 def pdf_to_csv(fraction_name, patient_dir):
 
@@ -24,28 +58,45 @@ def pdf_to_csv(fraction_name, patient_dir):
     output_path = os.path.join(patient_dir, fraction_name + '_temp' + ext2) #temporary csv file
     fpath = os.path.join(patient_dir, fraction_name + '.xlsx') #Final excel file
 
+    #Convert pdf into csv using tabula
+    tabula.convert_into(input_path, output_path, output_format='csv', pages='all')
 
-    TF = os.path.isfile(output_path) #Check if temp CSV file exists
-    TF2 = os.path.isfile(fpath) #Check if final excel file exists. Will only exist if previous run successful
-
-    #If final excel file exists, don't proceed with code.
-    if TF2:
-        return
-
-    if not TF and not TF2: #Only generate new csv if (1) no csv already exists and (2) no final excel file exists
-        print('generating temp csv')
-        tabula.convert_into(input_path, output_path, output_format='csv', pages='all')
-
-    #Fix output so structure labels all on one line, and every line labelled
+    #Open csv file using built-in python reader
     with open(output_path, 'r') as f:
         reader = csv.reader(f)
         data = list(reader)
         data_array = []
-        try:
-            data_array = np.array(data)
-        except:
-            print('check columns of temp csv file. Edit, save, and re-run')
-            return
+        #Fix hanging characters
+
+
+    try: #Will only work of no weird data misalignment in csv file
+        data_array = np.array(data)
+        print('no data misalignment. Proceeding with other formatting corrections')
+    except:
+        # Extract existing headers
+        headers = data[0]
+        # Check if there is any data in the 13th column
+        if any(len(row) > 12 and row[12] for row in data[1:]):
+            print('data in 13th column. Fixing alignment')
+            # Add column label to 13th column if necessary
+            if len(headers) == 12:
+                headers.append('TEST')
+
+        # Write the updated CSV file with the new column heading
+        with open(output_path, 'w', newline='') as outfile:
+            writer = csv.writer(outfile)
+            writer.writerows([headers] + data[1:])
+
+        #Open as pandas dataframe and correct shifts
+        fix_csv_shifts(output_path)
+
+        with open(output_path, 'r') as f2:
+            reader = csv.reader(f2)
+            data2 = list(reader)
+            data_array = []
+            data_array = np.array(data2)
+            print('Misalignment successfully corrected')
+
 
     structures = data_array[:, 0]
 
@@ -86,7 +137,6 @@ def pdf_to_csv(fraction_name, patient_dir):
 
     #Delete temporary csv file
     os.remove(output_path)
-
 def find_criteria_index(dfn_criteria, desired_str):
 
     inds = []
@@ -98,7 +148,6 @@ def find_criteria_index(dfn_criteria, desired_str):
     inds = np.asarray(inds)
 
     return inds
-
 def Gy_to_cGY(patient_dir, fraction_name):
     fpath_fraction = os.path.join(patient_dir, fraction_name + '.xlsx')
     df_fraction = pd.read_excel(fpath_fraction)
@@ -168,7 +217,6 @@ def Gy_to_cGY(patient_dir, fraction_name):
         df_fraction.to_excel(fpath_fraction, index=False, header=False)
 
         return
-
 def concatenate_excel_files(patient_dir, ATP_name, fraction_name):
 
     fpath_ATP = os.path.join(patient_dir, ATP_name + '.xlsx')
@@ -185,7 +233,9 @@ def concatenate_excel_files(patient_dir, ATP_name, fraction_name):
     test = df_main[df_main.iloc[:,0].str.contains('_ATP')]
     test_arr = test.values
     if len(test_arr) > 0:
+        print('ATP structures already in excel file')
         return
+
 
     #Convert dataframes to numpy arrays
     main_arr = df_main.values
@@ -202,7 +252,8 @@ def concatenate_excel_files(patient_dir, ATP_name, fraction_name):
         "D98% >= 34.4 Gy (-0.688 Gy)": "D98% >= 3440 cGy (-0.688 Gy)",
         "V36Gy <= 1 cm3 (+1 cm3)": "V3600cGy <= 1 cm3 (+1 cm3)",
         "V29Gy <= 20 %": "V2900cGy <= 20 %",
-        "V18.1Gy <= 50 %": "V1810cGy <= 50 %"
+        "V18.1Gy <= 50 %": "V1810cGy <= 50 %",
+        "V42Gy <= 50 %" : "V4200cGy <= 50 %"
     }
 
     #Convert ATP rows from Gy to cGy if necessary
@@ -229,7 +280,6 @@ def concatenate_excel_files(patient_dir, ATP_name, fraction_name):
     df_new.to_excel(fpath_fraction, index=False, header=False)
 
     return
-
 ############################################################################################
 def populate_dose_stat_xlsx(patient_dir, fraction, ATS):
     #get patient name
@@ -614,7 +664,7 @@ def populate_dose_stat_ROInew_xlsx(patient_dir, fraction, ATS):
         if ATS == 0:
             suffixes = ['_MR1', '_MR2', '_MR3', '_MR4', '_MR5', '', '_ATP']
         elif ATS == 1:
-            suffixes = ['MR1', 'MR2', 'MR3', 'MR4', 'MR5', '', '_V']
+            suffixes = ['_MR1', '_MR2', '_MR3', '_MR4', '_MR5', '', '_V']
 
 
     df = pd.read_excel(fpath_dvh)
@@ -792,12 +842,12 @@ def populate_dose_stat_ROInew_xlsx(patient_dir, fraction, ATS):
 
 ###################################################################################
 #Specific fraction
-patient_name = 'PER022'
+patient_name = 'PER093'
 patient_dir = os.path.join('/Users/sblackledge/Documents/audit_evolutivePOTD/ROInew', patient_name)
 #fraction = 0 for ref CT, 1 for MR1, 2 for MR2, etc.
-fraction = 1
+fraction = 0
 #ATS: 1 if ATS used, 0 if ATP of ATS used. 2 otherwise. Check 'ATP' column in 'ROI propagation key.xlsx'
-ATS = 0
+ATS = 1
 
 #If assessing suitability of reference plan, ATP/ATS is irrelevant - just need to plop ROIs onto plan. Verif doesn't exist
 if fraction == 0:
@@ -821,5 +871,9 @@ else:
         # Append ATP structures (dose stats from verif contours propagated to delivered plan) to fraction_name excel file
         concatenate_excel_files(patient_dir, ATP_name, fraction_name)
 
-populate_dose_stat_xlsx(patient_dir, fraction, ATS)
+fractions = [0, 1, 2, 3, 4, 5]
+delivery_type = [1, 1, 1, 1, 0, 0]
+for i, f in enumerate(fractions):
+    populate_dose_stat_ROInew_xlsx(patient_dir, f, delivery_type[i])
 
+populate_dose_stat_ROInew_xlsx(patient_dir, 0, 1)
