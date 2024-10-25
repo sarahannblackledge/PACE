@@ -28,3 +28,8 @@ def get_dicom_tags(dcm, ignore_private=True, ignore_groups=()):
         key_string = "%04x,%04x" % (g, e) # use e.g. int("000a", 16) to convert back to long.
         tags[key_string] = str(dcm[key].value)
     return tags
+
+def copy_dicom_tags(sitk_image, dcm, ignore_private=True, ignore_groups=()):
+    tags = get_dicom_tags(dcm, ignore_private=ignore_private, ignore_groups=ignore_groups)
+    for key in tags:
+        sitk_image.SetMetaData(key, tags[key])
