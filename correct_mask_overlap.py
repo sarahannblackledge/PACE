@@ -2,6 +2,7 @@ import numpy as np
 import SimpleITK as sitk
 import os
 
+
 def contour_check(mask):
     vals = np.unique(mask)
     if 1 in vals:
@@ -11,7 +12,7 @@ def contour_check(mask):
     return output
 
 
-def correct_overlap_nifti(fpath_prostate, fpath_bladder, fpath_rectum):
+def convert_nifti_to_summed_arr(fpath_prostate, fpath_bladder, fpath_rectum):
     #Read nifti files and generate sitk objects
     prostate_sitk = sitk.ReadImage(fpath_prostate)
     bladder_sitk = sitk.ReadImage(fpath_bladder)
@@ -21,7 +22,6 @@ def correct_overlap_nifti(fpath_prostate, fpath_bladder, fpath_rectum):
     prostate_mask = sitk.GetArrayFromImage(prostate_sitk)
     bladder_mask = sitk.GetArrayFromImage(bladder_sitk)
     rectum_mask = sitk.GetArrayFromImage(rectum_sitk)
-
 
     #Check that all masks actually have contours
     TF_prostate = contour_check(prostate_mask)
@@ -46,7 +46,9 @@ def correct_overlap_nifti(fpath_prostate, fpath_bladder, fpath_rectum):
     #Sum 3D masks to create 3D multiclass mask
     multiclass_mask = prostate_mask + bladder_mask + rectum_mask
     print(np.unique(multiclass_mask))
+    return multiclass_mask, prostate_sitk, bladder_sitk, rectum_sitk
 
+def overlap_correct(multiclass_mask):
     #correct prostate-bladder overlap (if exists)
     overlap_indices3 = np.where(multiclass_mask == 3)
     multiclass_mask[overlap_indices3] = 1
@@ -59,6 +61,28 @@ def correct_overlap_nifti(fpath_prostate, fpath_bladder, fpath_rectum):
     overlap_indices6 = np.where(multiclass_mask == 6)
     multiclass_mask[overlap_indices6] = 2
 
+    #Update label integers so consecutive (prostate = 1, bladder = 2, rectum = 3)
+    label4 = np.where(multiclass_mask == 4)
+    multiclass_mask[label4] = 3
+
+    return multiclass_mask
+
+def multiclass_to_nifti(multiclass_mask, template_sitk, save_subdirectory, fname):
+
+    multiclass_sitk = sitk.GetImageFromArray(multiclass_mask.astype("uint8"))
+    multiclass_sitk.CopyInformation(template_sitk)
+    multiclass_sitk.SetMetaData("ContourName",  'multiclass')
+
+    #Make subdirectory to save multi-class masks if doesn't already exist
+    os.makedirs(save_subdirectory, exist_ok=True)
+
+    #SAVE
+    fpath_multiclass = os.path.join(save_subdirectory, fname)
+    sitk.WriteImage(multiclass_sitk, fpath_multiclass, True)
+
+    return
+##########NEED TO FIX
+def save_indiv(multiclass_mask, template_mask):
     #Separate corrected multiclass mask back into individual masks
     prostate_mask_corrected = np.zeros(prostate_mask.shape)
     bladder_mask_corrected = np.zeros(bladder_mask.shape)
@@ -104,25 +128,28 @@ def correct_overlap_nifti(fpath_prostate, fpath_bladder, fpath_rectum):
 
     sitk.WriteImage(multiclass_sitk_corrected, os.path.join('/Users/sblackledge/Documents/ProKnow_database/RMH_proknow/proknowPACE/nifti_dump/masks4D_no_overlap', fname), True)
 
+    return
 
-#Single case example
-fpath_prostate = '/Users/sblackledge/Documents/ProKnow_database/RMH_proknow/proknowPACE/nifti_dump/masks3D/ProstateOnly/NIHR_1_MR11.nii'
-fpath_bladder = '/Users/sblackledge/Documents/ProKnow_database/RMH_proknow/proknowPACE/nifti_dump/masks3D/Bladder/NIHR_1_MR11.nii'
-fpath_rectum = '/Users/sblackledge/Documents/ProKnow_database/RMH_proknow/proknowPACE/nifti_dump/masks3D/Rectum/NIHR_1_MR11.nii'
 
-correct_overlap_nifti(fpath_prostate, fpath_bladder, fpath_rectum)
+#############################################################
+#Define folders
+save_directory = '/Users/sblackledge/DATA/ProKnow_database/RMH_proknow/proknowPACE/nifti_dump4'
+save_subdirectory = os.path.join(save_directory, 'masks3D_PBR')
+input_dir = 'masks3D'
+input_dir_prostate = os.path.join(save_directory, 'masks3D', 'ProstateOnly')
+input_dir_bladder = os.path.join(save_directory, 'masks3D', 'Bladder')
+input_dir_rectum = os.path.join(save_directory, 'masks3D', 'Rectum')
 
 #Loop through directory
-'''dir_prostate = '/Users/sblackledge/Documents/ProKnow_database/RMH_proknow/proknowPACE/nifti_dump/masks3D/ProstateOnly'
-dir_bladder = '/Users/sblackledge/Documents/ProKnow_database/RMH_proknow/proknowPACE/nifti_dump/masks3D/Bladder'
-dir_rectum = '/Users/sblackledge/Documents/ProKnow_database/RMH_proknow/proknowPACE/nifti_dump/masks3D/Rectum'
+for file in os.listdir(input_dir_prostate):
+    if file.endswith(".nii.gz"):
+        print(file)
+        fpath_prostate = os.path.join(input_dir_prostate, file)
+        fpath_bladder = os.path.join(input_dir_bladder, file)
+        fpath_rectum = os.path.join(input_dir_rectum, file)
 
-for file in os.listdir(dir_prostate):
-    if file.endswith(".nii"):
-        fpath_prostate = os.path.join(dir_prostate, file)
-        fpath_bladder = os.path.join(dir_bladder, file)
-        fpath_rectum = os.path.join(dir_rectum, file)
-
-        correct_overlap_nifti(fpath_prostate, fpath_bladder, fpath_rectum)'''
+        multiclass_mask_uncorrected, prostate_sitk, bladder_sitk, rectum_sitk = convert_nifti_to_summed_arr(fpath_prostate, fpath_bladder, fpath_rectum)
+        multiclass_mask_corrected = overlap_correct(multiclass_mask_uncorrected)
+        multiclass_to_nifti(multiclass_mask_corrected, prostate_sitk, save_subdirectory, file)
 
 
