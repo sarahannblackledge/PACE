@@ -276,6 +276,8 @@ def write_masks(output_directory, ref_rtstruct, mr_sitk, fname, masks_of_interes
         print(f'Mask saved to {savename}')
 
     return rtstruct_images_sub
+
+
 def dicom_convert(dose_dicoms, plan_dicoms, rtstruct_dicoms, mr_dicoms, output_directory, masks_of_interest):
     # Initialize lists and filename for storing data for retrospective use (if need to find corresponding raw dicoms)
     fname_excel = 'data_log.xlsx'
@@ -286,10 +288,10 @@ def dicom_convert(dose_dicoms, plan_dicoms, rtstruct_dicoms, mr_dicoms, output_d
 
     # Update excel file
     try:
-        workbook = load_workbook(fpath_excel) #Load of exists
+        workbook = load_workbook(fpath_excel)  # Load of exists
         sheet = workbook.active
     except FileNotFoundError:
-        workbook = Workbook() #Create a new workbook if file doesn't exist
+        workbook = Workbook()  # Create a new workbook if file doesn't exist
         sheet = workbook.active
         sheet.append(headers)
 
@@ -302,6 +304,9 @@ def dicom_convert(dose_dicoms, plan_dicoms, rtstruct_dicoms, mr_dicoms, output_d
 
         # Find corresponding contour set (RTSTRUCT uid encoded in plan dicom metadata)
         ref_rtstruct, rtstruct_fname, rtstruct_id = find_rtstruct_from_plan(ref_plan, rtstruct_dicoms)
+        if rtstruct_id == 'None':
+            print('skipping this dose')
+            continue
 
         # Find corresponding MR scan (MR uid encoded in rtstruct dicom metadata)
         ref_mr_study, mr_dirname, mr_study_description = find_mr_from_rtstruct(ref_rtstruct, mr_dicoms)
@@ -319,18 +324,12 @@ def dicom_convert(dose_dicoms, plan_dicoms, rtstruct_dicoms, mr_dicoms, output_d
         dose_image = write_dose(output_directory, dose_dicom, fname, mr_image, floc_el)
         rtstruct_images = write_masks(output_directory, ref_rtstruct, mr_image, fname, masks_of_interest)
 
-        #Update excel file
+        # Update excel file
         sheet.append(scan_row)
         workbook.save(fpath_excel)
         print('excel file updated')
 
-
-
-
-
-
-
-
+###############################################################ß
 #RUN
 mr_dicoms = build_mr_dict(mr_directory, floc_el)
 plan_dicoms = build_dcm_list(plan_directory, floc_el)
