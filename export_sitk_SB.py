@@ -5,6 +5,7 @@ import SimpleITK as sitk
 import sys
 import time
 from openpyxl import Workbook, load_workbook
+#Update path to where your pycharm project is saved
 sys.path.append('/Users/sblackledge/PycharmProjects/PACE/PACE')
 from dicom_utilities import copy_dicom_tags
 from key import key
@@ -317,7 +318,7 @@ def dicom_convert(dose_dicoms, plan_dicoms, rtstruct_dicoms, mr_dicoms, output_d
 
         # Look up patient id based on database ID number. Hard coded in 'db_id_key.py'
         pat_id = databaseID_to_patientID(mr_study_description, counter)
-        fname = pat_id + "_MR" + mr_study_description + ".nii.gz"
+        fname = pat_id + "_MR" + mr_study_description + ".nii.gz" #Change extension if different format is desired
 
         # Now save nifti files!
         mr_image = write_mr(output_directory, fname, ref_mr_study, floc_el)
